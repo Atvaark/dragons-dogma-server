@@ -1,16 +1,24 @@
 package cmd
 
-import "fmt"
+import (
+	"flag"
+	"fmt"
+)
+
+const (
+	hostFlagName    = "host"
+	hostFlagDefault = "localhost"
+)
 
 var CertCommand = Command{
 	Name:        "cert",
 	Description: "Creates a self signed certificate for the specified host",
 	Flags: []Flag{
-		{Name: "host", Value: "localhost"},
+		{Name: hostFlagName, Value: hostFlagDefault},
 	},
 	action: runCert,
 	args: func() commandArgs {
-		return &webArgs{}
+		return &certArgs{}
 	},
 }
 
@@ -19,8 +27,13 @@ type certArgs struct {
 }
 
 func (a *certArgs) init(flags []Flag, args []string) error {
-	// TODO: Read args
-	a.host = "localhost"
+	fls := flag.FlagSet{}
+	fls.StringVar(&a.host, hostFlagName, hostFlagDefault, "")
+	err := fls.Parse(args)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

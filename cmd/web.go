@@ -1,22 +1,25 @@
 package cmd
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
 )
 
 const (
-	webPortFlagName = "webPort"
-	portFlagName    = "port"
+	webPortFlagName    = "webPort"
+	webPortFlagDefault = 12500
+	portFlagName       = "port"
+	portFlagDefault    = 12501
 )
 
 var WebCommand = Command{
 	Name:        "web",
 	Description: "Starts the server",
 	Flags: []Flag{
-		{Name: webPortFlagName, Value: "12500"},
-		{Name: portFlagName, Value: "12501"},
+		{Name: webPortFlagName, Value: webPortFlagDefault},
+		{Name: portFlagName, Value: portFlagDefault},
 	},
 	action: runWeb,
 	args: func() commandArgs {
@@ -30,9 +33,14 @@ type webArgs struct {
 }
 
 func (a *webArgs) init(flags []Flag, args []string) error {
-	// TODO: Read args
-	a.webPort = 12500
-	a.port = 12501
+	fls := flag.FlagSet{}
+	fls.IntVar(&a.webPort, webPortFlagName, webPortFlagDefault, "")
+	fls.IntVar(&a.port, portFlagName, portFlagDefault, "")
+	err := fls.Parse(args)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -47,5 +55,5 @@ func runWeb(ctx *context) {
 }
 
 func RootHandler(w http.ResponseWriter, _ *http.Request) {
-	io.WriteString(w, "root!\n")
+	io.WriteString(w, "root\n")
 }

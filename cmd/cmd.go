@@ -20,7 +20,7 @@ type Command struct {
 
 type Flag struct {
 	Name        string
-	Value       string
+	Value       interface{}
 	EnvVariable string
 }
 
@@ -31,7 +31,6 @@ type commandArgs interface {
 type context struct {
 	command *Command
 	args    commandArgs
-	//flags   commandArgs
 }
 
 func (app *App) Run(args []string) {
@@ -87,5 +86,4 @@ func (app *App) help() {
 		}
 		fmt.Println()
 	}
-
 }
