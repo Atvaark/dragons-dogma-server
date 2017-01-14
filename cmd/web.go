@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/urfave/cli"
 )
 
 const (
@@ -14,17 +15,14 @@ const (
 	portFlagDefault    = 12501
 )
 
-var WebCommand = Command{
+var WebCommand = cli.Command{
 	Name:        "web",
 	Description: "Starts the server",
-	Flags: []Flag{
-		{Name: webPortFlagName, Value: webPortFlagDefault},
-		{Name: portFlagName, Value: portFlagDefault},
+	Flags: []cli.Flag{
+		cli.IntFlag{Name: webPortFlagName, Value: webPortFlagDefault},
+		cli.IntFlag{Name: portFlagName, Value: portFlagDefault},
 	},
-	action: runWeb,
-	args: func() commandArgs {
-		return &webArgs{}
-	},
+	Action: runWeb,
 }
 
 type webArgs struct {
@@ -32,24 +30,15 @@ type webArgs struct {
 	port    int
 }
 
-func (a *webArgs) init(flags []Flag, args []string) error {
-	fls := flag.FlagSet{}
-	fls.IntVar(&a.webPort, webPortFlagName, webPortFlagDefault, "")
-	fls.IntVar(&a.port, portFlagName, portFlagDefault, "")
-	err := fls.Parse(args)
-	if err != nil {
-		return err
-	}
+func runWeb(ctx *cli.Context) {
+	var args webArgs
+	args.webPort = ctx.Int(webPortFlagName)
+	args.port = ctx.Int(portFlagName)
 
-	return nil
+	startWebServer(&args)
 }
 
-func runWeb(ctx *context) {
-	fmt.Println("web")
-	args := ctx.args.(*webArgs)
-
-	fmt.Println(args)
-
+func startWebServer(args *webArgs) {
 	http.HandleFunc("/", RootHandler)
 	http.ListenAndServe(fmt.Sprintf(":%d", args.webPort), nil)
 }

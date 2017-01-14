@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"flag"
 	"fmt"
+
+	"github.com/urfave/cli"
 )
 
 const (
@@ -10,35 +11,22 @@ const (
 	hostFlagDefault = "localhost"
 )
 
-var CertCommand = Command{
+var CertCommand = cli.Command{
 	Name:        "cert",
 	Description: "Creates a self signed certificate for the specified host",
-	Flags: []Flag{
-		{Name: hostFlagName, Value: hostFlagDefault},
+	Flags: []cli.Flag{
+		cli.StringFlag{Name: hostFlagName, Value: hostFlagDefault},
 	},
-	action: runCert,
-	args: func() commandArgs {
-		return &certArgs{}
-	},
+	Action: runCert,
 }
 
 type certArgs struct {
 	host string
 }
 
-func (a *certArgs) init(flags []Flag, args []string) error {
-	fls := flag.FlagSet{}
-	fls.StringVar(&a.host, hostFlagName, hostFlagDefault, "")
-	err := fls.Parse(args)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func runCert(ctx *context) {
+func runCert(ctx *cli.Context) {
+	var args certArgs
+	args.host = ctx.String(hostFlagName)
 	fmt.Println("cert")
-	args := ctx.args.(*certArgs)
 	fmt.Println(args)
 }
