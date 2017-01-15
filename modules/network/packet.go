@@ -177,8 +177,16 @@ type OnlineCheckRequest struct {
 	EmptyPacket
 }
 
+func (p *OnlineCheckRequest) Type() PacketType {
+	return PacketType{onlineCheckID, requestID, noErrorID}
+}
+
 type DisconnectionRequest struct {
 	BooleanPacket
+}
+
+func (p *DisconnectionRequest) Type() PacketType {
+	return PacketType{disconnectionID, requestID, noErrorID}
 }
 
 type FastDataRequest struct {
@@ -195,6 +203,10 @@ type AuthenticationInformationRequestHeader struct {
 	DataLength uint32
 }
 
+func (p *AuthenticationInformationRequestHeader) Type() PacketType {
+	return PacketType{authenticationInformationHeaderID, requestID, noErrorID}
+}
+
 func (p *AuthenticationInformationRequestHeader) SetPayload(payload []byte) error {
 	const headerLength = 5
 	if len(payload) != headerLength {
@@ -209,8 +221,16 @@ type AuthenticationInformationRequestData struct {
 	DataChunkPacket
 }
 
+func (p *AuthenticationInformationRequestData) Type() PacketType {
+	return PacketType{authenticationInformationDataID, requestID, noErrorID}
+}
+
 type AuthenticationInformationRequestFooter struct {
 	EmptyPacket
+}
+
+func (p *AuthenticationInformationRequestFooter) Type() PacketType {
+	return PacketType{authenticationInformationFooterID, requestID, noErrorID}
 }
 
 type TusCommonAreaAcquisitionRequest struct {
@@ -218,12 +238,24 @@ type TusCommonAreaAcquisitionRequest struct {
 	PropertyIndices []byte
 }
 
+func (p *TusCommonAreaAcquisitionRequest) Type() PacketType {
+	return PacketType{tusCommonAreaAcquisitionID, requestID, noErrorID}
+}
+
 type TusCommonAreaSettingsRequest struct {
 	PropertyPacket
 }
 
+func (p *TusCommonAreaSettingsRequest) Type() PacketType {
+	return PacketType{tusCommonAreaSettingsID, requestID, noErrorID}
+}
+
 type TusCommonAreaAddRequest struct {
 	PropertyPacket
+}
+
+func (p *TusCommonAreaAddRequest) Type() PacketType {
+	return PacketType{tusCommonAreaAddID, requestID, noErrorID}
 }
 
 type TusUserAreaWriteRequestHeader struct {
@@ -233,12 +265,24 @@ type TusUserAreaWriteRequestHeader struct {
 	User       string
 }
 
+func (p *TusUserAreaWriteRequestHeader) Type() PacketType {
+	return PacketType{tusUserAreaWriteHeaderID, requestID, noErrorID}
+}
+
 type TusUserAreaWriteRequestData struct {
 	DataChunkPacket
 }
 
+func (p *TusUserAreaWriteRequestData) Type() PacketType {
+	return PacketType{tusUserAreaWriteDataID, requestID, noErrorID}
+}
+
 type TusUserAreaWriteRequestFooter struct {
 	EmptyPacket
+}
+
+func (p *TusUserAreaWriteRequestFooter) Type() PacketType {
+	return PacketType{tusUserAreaWriteFooterID, requestID, noErrorID}
 }
 
 type TusUserAreaReadRequestHeader struct {
@@ -247,12 +291,24 @@ type TusUserAreaReadRequestHeader struct {
 	User       string
 }
 
+func (p *TusUserAreaReadRequestHeader) Type() PacketType {
+	return PacketType{tusUserAreaReadHeaderID, requestID, noErrorID}
+}
+
 type TusUserAreaReadRequestData struct {
 	DataChunkReferencePacket
 }
 
+func (p *TusUserAreaReadRequestData) Type() PacketType {
+	return PacketType{tusUserAreaReadDataID, requestID, noErrorID}
+}
+
 type TusUserAreaReadRequestFooter struct {
 	EmptyPacket
+}
+
+func (p *TusUserAreaReadRequestFooter) Type() PacketType {
+	return PacketType{tusUserAreaReadFooterID, requestID, noErrorID}
 }
 
 // responses
@@ -261,8 +317,16 @@ type OnlineCheckResponse struct {
 	EmptyPacket
 }
 
+func (p *OnlineCheckResponse) Type() PacketType {
+	return PacketType{onlineCheckID, responseID, noErrorID}
+}
+
 type DisconnectionResponse struct {
 	BooleanPacket
+}
+
+func (p *DisconnectionResponse) Type() PacketType {
+	return PacketType{disconnectionID, responseID, noErrorID}
 }
 
 type FastDataResponse struct {
@@ -271,6 +335,10 @@ type FastDataResponse struct {
 	_    uint32 // 0x00000001
 	_    uint16 // len(User)
 	User string
+}
+
+func (p *FastDataResponse) Type() PacketType {
+	return PacketType{fastDataID, responseID, noErrorID}
 }
 
 func (p *FastDataResponse) SetPayload(payload []byte) error {
@@ -320,12 +388,24 @@ type TusCommonAreaAcquisitionResponse struct {
 	PropertyPacket
 }
 
+func (p *TusCommonAreaAcquisitionResponse) Type() PacketType {
+	return PacketType{tusCommonAreaAcquisitionID, responseID, noErrorID}
+}
+
 type TusCommonAreaSettingsResponse struct {
 	PropertyPacket
 }
 
+func (p *TusCommonAreaSettingsResponse) Type() PacketType {
+	return PacketType{tusCommonAreaSettingsID, responseID, noErrorID}
+}
+
 type TusCommonAreaAddResponse struct {
 	PropertyPacket
+}
+
+func (p *TusCommonAreaAddResponse) Type() PacketType {
+	return PacketType{tusCommonAreaAddID, responseID, noErrorID}
 }
 
 type TusUserAreaWriteResponseHeader struct {
@@ -333,12 +413,24 @@ type TusUserAreaWriteResponseHeader struct {
 	ChunkLength uint16
 }
 
+func (p *TusUserAreaWriteResponseHeader) Type() PacketType {
+	return PacketType{tusUserAreaWriteHeaderID, responseID, noErrorID}
+}
+
 type TusUserAreaWriteResponseData struct {
 	DataChunkReferencePacket
 }
 
+func (p *TusUserAreaWriteResponseData) Type() PacketType {
+	return PacketType{tusUserAreaWriteDataID, responseID, noErrorID}
+}
+
 type TusUserAreaWriteResponseFooter struct {
 	EmptyPacket
+}
+
+func (p *TusUserAreaWriteResponseFooter) Type() PacketType {
+	return PacketType{tusUserAreaWriteFooterID, responseID, noErrorID}
 }
 
 type TusUserAreaReadResponseHeader struct {
@@ -346,12 +438,24 @@ type TusUserAreaReadResponseHeader struct {
 	DataLength uint32
 }
 
+func (p *TusUserAreaReadResponseHeader) Type() PacketType {
+	return PacketType{tusUserAreaReadHeaderID, responseID, noErrorID}
+}
+
 type TusUserAreaReadResponseData struct {
 	DataChunkPacket
 }
 
+func (p *TusUserAreaReadResponseData) Type() PacketType {
+	return PacketType{tusUserAreaReadDataID, responseID, noErrorID}
+}
+
 type TusUserAreaReadResponseFooter struct {
 	EmptyPacket
+}
+
+func (p *TusUserAreaReadResponseFooter) Type() PacketType {
+	return PacketType{tusUserAreaReadFooterID, responseID, noErrorID}
 }
 
 // notifications
@@ -385,6 +489,10 @@ type ReconnectionNotification struct {
 	PacketHeader
 	Host string
 	Port uint16
+}
+
+func (p *ReconnectionNotification) Type() PacketType {
+	return PacketType{reconnectionID, notificationID, noErrorID}
 }
 
 type ConnectionSummaryNotification struct {
