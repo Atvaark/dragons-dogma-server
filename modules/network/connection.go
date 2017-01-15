@@ -55,7 +55,7 @@ func (conn *ClientConn) Send(packet Packet) error {
 
 	var header PacketHeader
 	header.Length = uint16(packetLength)
-	header.PacketType = packet.Type()
+	header.PacketType = GetPacketType(packet)
 
 	switch header.PacketType.TypeID {
 	case responseID:

@@ -139,7 +139,7 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 	if !ok {
 		return nil, NewPacketTypeError()
 	}
-	err = client.Send(&AuthenticationInformationResponseData{DataChunkReferencePacket{ChunkLength: authenticationInformationRequestData.ChunkLength}})
+	err = client.Send(&AuthenticationInformationResponseData{DataChunkReferencePacket{ChunkLength: uint16(len(authenticationInformationRequestData.ChunkData))}})
 	if err != nil {
 		return nil, err
 	}
