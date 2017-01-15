@@ -2,7 +2,6 @@ package network
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/binary"
 
 	"fmt"
@@ -19,16 +18,16 @@ func newServerSequenceID() uint16 {
 }
 
 type ClientConn struct {
-	*tls.Conn
+	io.ReadWriter
 	ID               int64
 	User             string
 	ServerSequenceID uint16
 	ClientSequenceID uint16
 }
 
-func NewClientConn(conn *tls.Conn, ID int64) *ClientConn {
+func NewClientConn(rw io.ReadWriter, ID int64) *ClientConn {
 	return &ClientConn{
-		Conn:             conn,
+		ReadWriter:       rw,
 		ID:               ID,
 		ServerSequenceID: newServerSequenceID(),
 	}
