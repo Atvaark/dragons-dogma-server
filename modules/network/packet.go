@@ -77,6 +77,10 @@ type PacketHeader struct {
 	PacketType PacketType
 }
 
+func (p *PacketHeader) String() string {
+	return p.PacketType.String()
+}
+
 func (p *PacketHeader) Payload() ([]byte, error) {
 	var payload [0]byte
 	return payload[:], nil
@@ -455,6 +459,70 @@ func init() {
 		//connectionSummaryID:func() Packet {return &ConnectionSummaryNotification{}},
 		},
 	}
+}
+
+func (pt *PacketType) String() string {
+	var n string
+	switch pt.NameID {
+	case onlineCheckID:
+		n = "onlineCheck"
+	case disconnectionID:
+		n = "disconnection"
+	case reconnectionID:
+		n = "reconnection"
+	case fastDataID:
+		n = "fastData"
+	case connectionSummaryID:
+		n = "connectionSummary"
+	case authenticationInformationHeaderID:
+		n = "authenticationInformationHeader"
+	case authenticationInformationDataID:
+		n = "authenticationInformationData"
+	case authenticationInformationFooterID:
+		n = "authenticationInformationFooter"
+	case tusCommonAreaAcquisitionID:
+		n = "tusCommonAreaAcquisition"
+	case tusCommonAreaSettingsID:
+		n = "tusCommonAreaSettings"
+	case tusCommonAreaAddID:
+		n = "tusCommonAreaAdd"
+	case tusUserAreaWriteHeaderID:
+		n = "tusUserAreaWriteHeader"
+	case tusUserAreaWriteDataID:
+		n = "tusUserAreaWriteData"
+	case tusUserAreaWriteFooterID:
+		n = "tusUserAreaWriteFooter"
+	case tusUserAreaReadHeaderID:
+		n = "tusUserAreaReadHeader"
+	case tusUserAreaReadDataID:
+		n = "tusUserAreaReadData"
+	case tusUserAreaReadFooterID:
+		n = "tusUserAreaReadFooter"
+	default:
+		n = fmt.Sprintf("unknown(%x)", pt.NameID)
+	}
+
+	var t string
+	switch pt.TypeID {
+	case requestID:
+		t = "request"
+	case responseID:
+		t = "response"
+	case notificationID:
+		t = "notification"
+	default:
+		t = fmt.Sprintf("unknown(%x)", pt.TypeID)
+	}
+
+	var e string
+	switch pt.ErrorID {
+	case noErrorID:
+		e = ""
+	default:
+		e = fmt.Sprintf(" error(%x)", pt.ErrorID)
+	}
+
+	return fmt.Sprintf("%s %s%s", n, t, e)
 }
 
 func NewPacketFromHeader(header PacketHeader) (Packet, error) {

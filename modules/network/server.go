@@ -3,6 +3,7 @@ package network
 import (
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"sync/atomic"
 )
@@ -48,7 +49,7 @@ func (s *Server) ListenAndServe() error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			continue
 		}
 
@@ -60,40 +61,39 @@ func (s *Server) ListenAndServe() error {
 func handleConnection(conn net.Conn, connID int64) {
 	defer conn.Close()
 
-	fmt.Printf("[%d] connecting\n", connID)
+	log.Printf("[%d] connecting\n", connID)
 
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
-		fmt.Printf("[%d] no TLS connection\n", connID)
+		log.Printf("[%d] no TLS connection\n", connID)
 		return
 	}
 
 	err := tlsConn.Handshake()
 	if err != nil {
-		fmt.Printf("[%d] TLS handshake failed:%v\n", connID, err)
+		log.Printf("[%d] TLS handshake failed:%v\n", connID, err)
 		return
 	}
 
 	client, err := authenticate(tlsConn, connID)
 	if err != nil {
-		fmt.Printf("[%d] auth failed: %v\n", connID, err)
+		log.Printf("[%d] auth failed: %v\n", connID, err)
 		return
 	}
 
-	fmt.Printf("[%d] user connected: %s\n", client.ID, client.User)
+	log.Printf("%v connected\n", client)
 
 	err = disconnect(client)
 	if err != nil {
-		fmt.Printf("[%d] disconnect failed: %v\n", connID, err)
+		log.Printf("%v disconnect failed: %v\n", client, err)
 		return
 	}
 
-	fmt.Printf("[%d] disconnected\n", client.ID)
+	log.Printf("%v disconnected\n", client)
 }
 
 func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
-	client := ClientConn{Conn: conn, ID: connID}
-
+	client := NewClientConn(conn, connID)
 	var err error
 	var response Packet
 
@@ -158,7 +158,7 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 		return nil, err
 	}
 
-	return &client, nil
+	return client, nil
 }
 
 func disconnect(conn *ClientConn) error {

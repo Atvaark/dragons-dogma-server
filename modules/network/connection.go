@@ -5,8 +5,18 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 
+	"fmt"
 	"io"
+	"log"
+	"math/rand"
+	"time"
 )
+
+var serverSequenceIDRand = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+
+func newServerSequenceID() uint16 {
+	return uint16(serverSequenceIDRand.Uint32())
+}
 
 type ClientConn struct {
 	*tls.Conn
@@ -14,6 +24,22 @@ type ClientConn struct {
 	User             string
 	ServerSequenceID uint16
 	ClientSequenceID uint16
+}
+
+func NewClientConn(conn *tls.Conn, ID int64) *ClientConn {
+	return &ClientConn{
+		Conn:             conn,
+		ID:               ID,
+		ServerSequenceID: newServerSequenceID(),
+	}
+}
+
+func (conn *ClientConn) String() string {
+	if len(conn.User) > 0 {
+		return fmt.Sprintf("[%d/%s]", conn.ID, conn.User)
+	}
+
+	return fmt.Sprintf("[%d]", conn.ID)
 }
 
 func (conn *ClientConn) Send(packet Packet) error {
@@ -30,7 +56,19 @@ func (conn *ClientConn) Send(packet Packet) error {
 	var header PacketHeader
 	header.Length = uint16(packetLength)
 	header.PacketType = packet.Type()
+
+	switch header.PacketType.TypeID {
+	case responseID:
+		header.SequenceID = conn.ClientSequenceID
+	case requestID:
+	case notificationID:
+		conn.ServerSequenceID++
+		header.SequenceID = conn.ServerSequenceID
+	}
+
 	packet.SetHeader(header)
+
+	log.Printf("%v sending %v\n", conn, &header)
 
 	err = binary.Write(conn, binary.BigEndian, header)
 	if err != nil {
@@ -52,6 +90,8 @@ func (conn *ClientConn) Recv() (Packet, error) {
 		return nil, err
 	}
 
+	log.Printf("%v receiving %v\n", conn, &header)
+
 	packet, err := NewPacketFromHeader(header)
 	if err != nil {
 		return nil, err
@@ -72,6 +112,8 @@ func (conn *ClientConn) Recv() (Packet, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	conn.ClientSequenceID = header.SequenceID
 
 	return packet, nil
 }
