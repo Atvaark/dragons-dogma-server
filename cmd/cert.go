@@ -20,13 +20,13 @@ var CertCommand = cli.Command{
 	Action: runCert,
 }
 
-type certArgs struct {
+type certConfig struct {
 	host string
 }
 
 func runCert(ctx *cli.Context) {
-	var args certArgs
-	args.host = ctx.String(hostFlagName)
+	var cfg certConfig
+	cfg.host = ctx.String(hostFlagName)
 	fmt.Println("cert")
-	fmt.Println(args)
+	fmt.Println(cfg)
 }
