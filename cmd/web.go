@@ -1,21 +1,22 @@
 package cmd
 
 import (
-	"fmt"
-	"io"
-	"net/http"
-
 	"github.com/atvaark/dragons-dogma-server/modules/network"
+	"github.com/atvaark/dragons-dogma-server/modules/website"
 	"github.com/urfave/cli"
 )
 
 const (
-	webPortFlagName  = "webPort"
-	gamePortFlagName = "gamePort"
-	gameCertFileName = "gameCertFile"
-	gameKeyFileName  = "gameKeyFile"
+	webPortFlagName     = "webPort"
+	webSteamKeyFlagName = "webSteamKey"
+	webHostnameFlagName = "webHostname"
+	gamePortFlagName    = "gamePort"
+	gameCertFileName    = "gameCertFile"
+	gameKeyFileName     = "gameKeyFile"
 
 	webPortFlagDefault  = 12500
+	webSteamKeyDefault  = ""
+	webHostnameDefault  = "localhost"
 	gamePortFlagDefault = 12501
 	gameCertFileDefault = "server.crt"
 	gameKeyFileDefault  = "server.key"
@@ -26,6 +27,8 @@ var WebCommand = cli.Command{
 	Description: "Starts the server",
 	Flags: []cli.Flag{
 		cli.IntFlag{Name: webPortFlagName, Value: webPortFlagDefault},
+		cli.StringFlag{Name: webSteamKeyFlagName, Value: webSteamKeyDefault},
+		cli.StringFlag{Name: webHostnameFlagName, Value: webHostnameDefault},
 		cli.IntFlag{Name: gamePortFlagName, Value: gamePortFlagDefault},
 		cli.StringFlag{Name: gameCertFileName, Value: gameCertFileDefault},
 		cli.StringFlag{Name: gameKeyFileName, Value: gameKeyFileDefault},
@@ -35,6 +38,8 @@ var WebCommand = cli.Command{
 
 type webConfig struct {
 	webPort      int
+	webSteamKey  string
+	webHostname  string
 	gamePort     int
 	gameCertFile string
 	gameKeyFile  string
@@ -42,6 +47,8 @@ type webConfig struct {
 
 func (cfg *webConfig) parse(ctx *cli.Context) {
 	cfg.webPort = ctx.Int(webPortFlagName)
+	cfg.webSteamKey = ctx.String(webSteamKeyFlagName)
+	cfg.webHostname = ctx.String(webHostnameFlagName)
 	cfg.gamePort = ctx.Int(gamePortFlagName)
 	cfg.gameCertFile = ctx.String(gameCertFileName)
 	cfg.gameKeyFile = ctx.String(gameKeyFileName)
@@ -71,13 +78,17 @@ func startGameServer(cfg *webConfig) {
 }
 
 func startWebServer(cfg *webConfig) {
-	http.HandleFunc("/", RootHandler)
-	err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.webPort), nil)
+	srvConfig := website.WebsiteConfig{
+		Host: cfg.webHostname,
+		Port: cfg.webPort,
+		AuthConfig: website.AuthConfig{
+			SteamKey: cfg.webSteamKey,
+		},
+	}
+
+	srv := website.NewWebsite(srvConfig)
+	err := srv.ListenAndServe()
 	if err != nil {
 		panic(err)
 	}
-}
-
-func RootHandler(w http.ResponseWriter, _ *http.Request) {
-	io.WriteString(w, "root\n")
 }

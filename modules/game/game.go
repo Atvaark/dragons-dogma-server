@@ -86,21 +86,21 @@ func (d *OnlineUrDragon) NetworkProperties() []network.Property {
 
 func (d *OnlineUrDragon) SetNetworkProperties(props []network.Property) {
 	const heartPropCount = UrDragonHeartCount / 2
-	const dragonHeatsHealthIndex = 1
-	const dragonHeatsHealthIndexEnd = dragonHeatsHealthIndex + heartPropCount
-	const dragonHeatsHealthMaxIndex = dragonHeatsHealthIndexEnd
-	const dragonHeatsHealthMaxIndexEnd = dragonHeatsHealthMaxIndex + heartPropCount
+	const dragonHeartsHealthIndex = 1
+	const dragonHeartsHealthIndexEnd = dragonHeartsHealthIndex + heartPropCount
+	const dragonHeartsHealthMaxIndex = dragonHeartsHealthIndexEnd
+	const dragonHeartsHealthMaxIndexEnd = dragonHeartsHealthMaxIndex + heartPropCount
 
 	for _, prop := range props {
 		switch {
 		case prop.Index == 0:
 			d.Generation = prop.Value2
-		case prop.Index >= dragonHeatsHealthIndex && prop.Index < dragonHeatsHealthIndexEnd:
-			d.Hearts[(prop.Index-dragonHeatsHealthIndex)*2].Health = prop.Value1
-			d.Hearts[(prop.Index-dragonHeatsHealthIndex)*2+1].Health = prop.Value2
-		case prop.Index >= dragonHeatsHealthMaxIndex && prop.Index < dragonHeatsHealthMaxIndexEnd:
-			d.Hearts[(prop.Index-dragonHeatsHealthMaxIndex)*2].MaxHealth = prop.Value1
-			d.Hearts[(prop.Index-dragonHeatsHealthMaxIndex)*2+1].MaxHealth = prop.Value2
+		case prop.Index >= dragonHeartsHealthIndex && prop.Index < dragonHeartsHealthIndexEnd:
+			d.Hearts[(prop.Index-dragonHeartsHealthIndex)*2].Health = prop.Value1
+			d.Hearts[(prop.Index-dragonHeartsHealthIndex)*2+1].Health = prop.Value2
+		case prop.Index >= dragonHeartsHealthMaxIndex && prop.Index < dragonHeartsHealthMaxIndexEnd:
+			d.Hearts[(prop.Index-dragonHeartsHealthMaxIndex)*2].MaxHealth = prop.Value1
+			d.Hearts[(prop.Index-dragonHeartsHealthMaxIndex)*2+1].MaxHealth = prop.Value2
 		case prop.Index == 31:
 			d.FightCount = prop.Value2
 		case prop.Index == 32:
