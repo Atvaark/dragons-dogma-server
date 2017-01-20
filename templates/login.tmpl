@@ -1,2 +1,6 @@
 <h1>Login</h1>
+{{if .Error}}
+<span>{{.Error}}</span>
+{{else}}
 <span>Successfully logged in as {{.PersonaName}}</span>
+{{end}}

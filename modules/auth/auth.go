@@ -1,8 +1,9 @@
-package website
+package auth
 
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -11,12 +12,20 @@ import (
 	"strings"
 )
 
-const steamLoginURL = "https://steamcommunity.com/openid/login"
-const steamGetPlayerSummariesURL = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/"
+const (
+	steamLoginURL              = "https://steamcommunity.com/openid/login"
+	steamGetPlayerSummariesURL = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/"
+	steamGetOwnedGamesURL      = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/"
+	dragonsDogmaAppId          = 367500
+)
 
 var loginUserURL = regexp.MustCompile(`^http://steamcommunity.com/openid/id/(\d+)$`)
 
 type steamId64 int64
+
+func (steamId steamId64) String() string {
+	return strconv.FormatInt(int64(steamId), 10)
+}
 
 type steamOpenId struct {
 	ns             string
@@ -51,6 +60,64 @@ type steamUser struct {
 	LocCityId                int    `json:"loccityid"`
 }
 
+type steamGame struct {
+	AppId           int `json:"appid"`
+	PlaytimeForever int `json:"playtime_forever"`
+}
+
+type Redirect struct{}
+
+func (*Redirect) Error() string {
+	return "redirected"
+}
+
+type AuthHandler struct {
+	loginCallbackURL string
+	steamKey         string
+}
+
+func NewAuthHandler(loginPath string, host string, port int, steamKey string) *AuthHandler {
+	// TODO: get protocol/port from config
+	callbackURL := fmt.Sprintf("http://%s:%d%s", host, port, loginPath)
+	return &AuthHandler{
+		loginCallbackURL: callbackURL,
+		steamKey:         steamKey,
+	}
+}
+
+func (f *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamUser, error) {
+	// TODO: Check session cookie
+
+	openid, openidFound := parseOpenid(r.URL.Query())
+	if !openidFound {
+		steamLogin, err := buildAuthURK(f.loginCallbackURL)
+		if err != nil {
+			return nil, errors.New("could not initialize steam login")
+		}
+
+		http.Redirect(w, r, steamLogin, http.StatusTemporaryRedirect)
+		return nil, &Redirect{} // TODO: return a redirect error???
+	}
+
+	steamId, err := validateOpenid(openid)
+	if err != nil {
+		return nil, errors.New("could not validate steam login")
+	}
+
+	profile, err := fetchUserProfile(f.steamKey, steamId)
+	if err != nil {
+		return nil, errors.New("could not fetch user profile")
+	}
+
+	_, err = checkGameOwnership(f.steamKey, steamId, dragonsDogmaAppId)
+	if err != nil {
+		return nil, errors.New("could not fetch user games")
+	}
+	// TODO: create login session
+
+	return profile, nil
+}
+
 func parseOpenid(query url.Values) (*steamOpenId, bool) {
 	var id steamOpenId
 	id.ns = query.Get("openid.ns")
@@ -72,7 +139,6 @@ func parseOpenid(query url.Values) (*steamOpenId, bool) {
 }
 
 func validateOpenid(id *steamOpenId) (steamId64, error) {
-
 	params := make(url.Values)
 	params.Set("openid.assoc_handle", id.assoc_handle)
 	params.Set("openid.signed", id.signed)
@@ -126,13 +192,13 @@ func validateOpenid(id *steamOpenId) (steamId64, error) {
 	return steamId64(steamId), nil
 }
 
-func buildAuthUrl(callbackURL string) (string, error) {
+func buildAuthURK(callbackURL string) (string, error) {
 	callback, err := url.Parse(callbackURL)
 	if err != nil {
 		return "", err
 	}
 
-	authUrl, err := url.Parse(steamLoginURL)
+	steamAuthURL, err := url.Parse(steamLoginURL)
 	if err != nil {
 		return "", err
 	}
@@ -153,15 +219,15 @@ func buildAuthUrl(callbackURL string) (string, error) {
 	params.Add("openid.ns.sreg", "http://openid.net/extensions/sreg/1.1")
 	params.Add("openid.claimed_id", "http://specs.openid.net/auth/2.0/identifier_select")
 	params.Add("openid.identity", "http://specs.openid.net/auth/2.0/identifier_select")
-	authUrl.RawQuery = params.Encode()
+	steamAuthURL.RawQuery = params.Encode()
 
-	return authUrl.String(), nil
+	return steamAuthURL.String(), nil
 }
 
 func fetchUserProfile(steamKey string, steamId steamId64) (*steamUser, error) {
 	params := make(url.Values)
 	params.Set("key", steamKey)
-	params.Set("steamids", strconv.FormatInt(int64(steamId), 10))
+	params.Set("steamids", steamId.String())
 	playerSummaryURL := steamGetPlayerSummariesURL + "?" + params.Encode()
 
 	profileResponse, err := http.Get(playerSummaryURL)
@@ -194,4 +260,48 @@ func fetchUserProfile(steamKey string, steamId steamId64) (*steamUser, error) {
 
 	p := res.Response.Players[0]
 	return &p, nil
+}
+
+func checkGameOwnership(steamKey string, steamId steamId64, appID int) (bool, error) {
+	params := make(url.Values)
+	params.Set("key", steamKey)
+	params.Set("steamid", steamId.String())
+	params.Set("format", "json")
+	params.Set("appids_filter[0]", strconv.Itoa(appID))
+	gameOwnershipURL := steamGetOwnedGamesURL + "?" + params.Encode()
+
+	response, err := http.Get(gameOwnershipURL)
+	if err != nil {
+		return false, err
+	}
+
+	defer response.Body.Close()
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return false, err
+	}
+
+	type Result struct {
+		Response struct {
+			GameCount int         `json:"game_count"`
+			Games     []steamGame `json:"games"`
+		} `json:"response"`
+	}
+
+	var res Result
+	err = json.Unmarshal(body, &res)
+	if err != nil {
+		return false, err
+	}
+
+	if len(res.Response.Games) != 1 {
+		return false, nil
+	}
+
+	if res.Response.Games[0].AppId != appID {
+		return false, nil
+	}
+
+	return true, nil
 }

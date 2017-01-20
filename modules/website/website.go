@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+
+	"github.com/atvaark/dragons-dogma-server/modules/auth"
 )
 
 type Website struct {
@@ -30,7 +32,7 @@ func NewWebsite(cfg WebsiteConfig) *Website {
 }
 
 func (w *Website) ListenAndServe() error {
-	loginHandler := &loginHandler{config: w.config, path: "/login/"}
+	loginHandler := newLoginHandler(w.config, "/login")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", HomeHandlerFunc)
@@ -48,47 +50,39 @@ func HomeHandlerFunc(w http.ResponseWriter, _ *http.Request) {
 	homeTemplate.Execute(w, nil)
 }
 
-type loginModel struct {
-	PersonaName string
+type loginHandler struct {
+	config      WebsiteConfig
+	path        string
+	authHandler *auth.AuthHandler
 }
 
-type loginHandler struct {
-	config WebsiteConfig
-	path   string
+func newLoginHandler(config WebsiteConfig, path string) *loginHandler {
+	return &loginHandler{
+		config:      config,
+		path:        path,
+		authHandler: auth.NewAuthHandler(path, config.Host, config.Port, config.AuthConfig.SteamKey),
+	}
 }
 
 func (h *loginHandler) handle(w http.ResponseWriter, r *http.Request) {
-	openid, openidFound := parseOpenid(r.URL.Query())
-	if !openidFound {
-		// TODO: get protocol/port from config
-		callbackURL := fmt.Sprintf("http://%s:%d%s", h.config.Host, h.config.Port, h.path)
-
-		steamLogin, err := buildAuthUrl(callbackURL)
-		if err != nil {
-			http.Error(w, "could not initialize steam login", http.StatusInternalServerError)
-			return
-		}
-
-		http.Redirect(w, r, steamLogin, http.StatusTemporaryRedirect)
+	profile, err := h.authHandler.Handle(w, r)
+	if _, redirect := err.(*auth.Redirect); redirect {
 		return
 	}
 
-	steamId, err := validateOpenid(openid)
+	type loginModel struct {
+		PersonaName string
+		Error       string
+	}
+
+	var model loginModel
+
+	if profile != nil {
+		model.PersonaName = profile.PersonaName
+	}
+
 	if err != nil {
-		http.Error(w, "could not validate steam login", http.StatusInternalServerError)
-		return
-	}
-
-	profile, err := fetchUserProfile(h.config.AuthConfig.SteamKey, steamId)
-	if err != nil {
-		http.Error(w, "could not fetch user profile", http.StatusInternalServerError)
-		return
-	}
-
-	// TODO: create login session
-
-	model := loginModel{
-		PersonaName: profile.PersonaName,
+		model.Error = err.Error()
 	}
 
 	loginTemplate.Execute(w, model)
