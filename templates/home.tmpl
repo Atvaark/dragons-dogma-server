@@ -1,2 +1,6 @@
 <h1>Home</h1>
+{{if .LoggedIn}}
+<span>Logged in as {{.PersonaName}}</span>
+{{else}}
 <a href="/login">Login</a>
+{{end}}

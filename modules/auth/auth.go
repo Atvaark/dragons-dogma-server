@@ -85,12 +85,11 @@ func NewAuthHandler(loginPath string, host string, port int, steamKey string) *A
 	}
 }
 
-func (f *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamUser, error) {
-	// TODO: Check session cookie
-
+func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamUser, error) {
+	// OpenID flow
 	openid, openidFound := parseOpenid(r.URL.Query())
 	if !openidFound {
-		steamLogin, err := buildAuthURK(f.loginCallbackURL)
+		steamLogin, err := buildAuthURK(h.loginCallbackURL)
 		if err != nil {
 			return nil, errors.New("could not initialize steam login")
 		}
@@ -104,16 +103,15 @@ func (f *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamUser
 		return nil, errors.New("could not validate steam login")
 	}
 
-	profile, err := fetchUserProfile(f.steamKey, steamId)
+	profile, err := fetchUserProfile(h.steamKey, steamId)
 	if err != nil {
 		return nil, errors.New("could not fetch user profile")
 	}
 
-	_, err = checkGameOwnership(f.steamKey, steamId, dragonsDogmaAppId)
+	_, err = checkGameOwnership(h.steamKey, steamId, dragonsDogmaAppId)
 	if err != nil {
 		return nil, errors.New("could not fetch user games")
 	}
-	// TODO: create login session
 
 	return profile, nil
 }

@@ -32,10 +32,14 @@ func NewWebsite(cfg WebsiteConfig) *Website {
 }
 
 func (w *Website) ListenAndServe() error {
-	loginHandler := newLoginHandler(w.config, "/login")
+	sessionStore := auth.NewSessionStore()
+	sessionHandler := auth.NewSessionHandler(sessionStore)
+	authHandler := auth.NewAuthHandler("/login/", w.config.Host, w.config.Port, w.config.AuthConfig.SteamKey)
+	homeHandler := &homeHandler{"/", sessionHandler}
+	loginHandler := &loginHandler{"/login/", sessionHandler, authHandler}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", HomeHandlerFunc)
+	mux.HandleFunc(homeHandler.path, homeHandler.handle)
 	mux.HandleFunc(loginHandler.path, loginHandler.handle)
 
 	err := http.ListenAndServe(fmt.Sprintf(":%d", w.config.Port), mux)
@@ -46,33 +50,51 @@ func (w *Website) ListenAndServe() error {
 	return nil
 }
 
-func HomeHandlerFunc(w http.ResponseWriter, _ *http.Request) {
-	homeTemplate.Execute(w, nil)
+type homeHandler struct {
+	path           string
+	sessionHandler *auth.SessionHandler
+}
+
+type homeModel struct {
+	PersonaName string
+	LoggedIn    bool
+}
+
+func (h *homeHandler) handle(w http.ResponseWriter, r *http.Request) {
+	profile, _ := h.sessionHandler.Handle(w, r)
+
+	var model homeModel
+	if profile != nil {
+		model.PersonaName = profile.PersonaName
+		model.LoggedIn = true
+	}
+
+	homeTemplate.Execute(w, model)
 }
 
 type loginHandler struct {
-	config      WebsiteConfig
-	path        string
-	authHandler *auth.AuthHandler
+	path           string
+	sessionHandler *auth.SessionHandler
+	authHandler    *auth.AuthHandler
 }
 
-func newLoginHandler(config WebsiteConfig, path string) *loginHandler {
-	return &loginHandler{
-		config:      config,
-		path:        path,
-		authHandler: auth.NewAuthHandler(path, config.Host, config.Port, config.AuthConfig.SteamKey),
-	}
+type loginModel struct {
+	PersonaName string
+	Error       string
 }
 
 func (h *loginHandler) handle(w http.ResponseWriter, r *http.Request) {
-	profile, err := h.authHandler.Handle(w, r)
-	if _, redirect := err.(*auth.Redirect); redirect {
-		return
-	}
+	var err error
+	profile, loggedIn := h.sessionHandler.Handle(w, r)
+	if !loggedIn {
+		profile, err = h.authHandler.Handle(w, r)
+		if _, redirect := err.(*auth.Redirect); redirect {
+			return
+		}
 
-	type loginModel struct {
-		PersonaName string
-		Error       string
+		if err == nil {
+			h.sessionHandler.SetSessionCookie(w, profile)
+		}
 	}
 
 	var model loginModel
