@@ -3,7 +3,6 @@ package auth
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -76,9 +75,12 @@ type AuthHandler struct {
 	steamKey         string
 }
 
-func NewAuthHandler(loginPath string, host string, port int, steamKey string) *AuthHandler {
-	// TODO: get protocol/port from config
-	callbackURL := fmt.Sprintf("http://%s:%d%s", host, port, loginPath)
+func NewAuthHandler(rootURL string, loginPath string, steamKey string) *AuthHandler {
+	callbackURL := rootURL
+	if strings.HasPrefix(loginPath, "/") {
+		loginPath = strings.TrimPrefix(loginPath, "/")
+	}
+	callbackURL += loginPath
 	return &AuthHandler{
 		loginCallbackURL: callbackURL,
 		steamKey:         steamKey,

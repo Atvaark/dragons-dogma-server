@@ -17,7 +17,7 @@ type AuthConfig struct {
 }
 
 type WebsiteConfig struct {
-	Host       string
+	RootURL    string
 	Port       int
 	AuthConfig AuthConfig
 }
@@ -34,9 +34,9 @@ func NewWebsite(cfg WebsiteConfig) *Website {
 func (w *Website) ListenAndServe() error {
 	sessionStore := auth.NewSessionStore()
 	sessionHandler := auth.NewSessionHandler(sessionStore)
-	authHandler := auth.NewAuthHandler("/login/", w.config.Host, w.config.Port, w.config.AuthConfig.SteamKey)
-	homeHandler := &homeHandler{"/", sessionHandler}
-	loginHandler := &loginHandler{"/login/", sessionHandler, authHandler}
+	authHandler := auth.NewAuthHandler(w.config.RootURL, "/login/", w.config.AuthConfig.SteamKey)
+	homeHandler := &homeHandler{w.config.RootURL, "/", sessionHandler}
+	loginHandler := &loginHandler{w.config.RootURL, "/login/", sessionHandler, authHandler}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(homeHandler.path, homeHandler.handle)
@@ -50,12 +50,18 @@ func (w *Website) ListenAndServe() error {
 	return nil
 }
 
+type rootModel struct {
+	RootURL string
+}
+
 type homeHandler struct {
+	rootURL        string
 	path           string
 	sessionHandler *auth.SessionHandler
 }
 
 type homeModel struct {
+	rootModel
 	PersonaName string
 	LoggedIn    bool
 }
@@ -64,6 +70,8 @@ func (h *homeHandler) handle(w http.ResponseWriter, r *http.Request) {
 	profile, _ := h.sessionHandler.GetSessionCookie(w, r)
 
 	var model homeModel
+	model.RootURL = h.rootURL
+
 	if profile != nil {
 		model.PersonaName = profile.PersonaName
 		model.LoggedIn = true
@@ -73,12 +81,14 @@ func (h *homeHandler) handle(w http.ResponseWriter, r *http.Request) {
 }
 
 type loginHandler struct {
+	rootURL        string
 	path           string
 	sessionHandler *auth.SessionHandler
 	authHandler    *auth.AuthHandler
 }
 
 type loginModel struct {
+	rootModel
 	PersonaName string
 	Error       string
 }
@@ -98,6 +108,7 @@ func (h *loginHandler) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var model loginModel
+	model.RootURL = h.rootURL
 
 	if profile != nil {
 		model.PersonaName = profile.PersonaName

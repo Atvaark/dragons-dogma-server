@@ -2,5 +2,5 @@
 {{if .LoggedIn}}
 <span>Logged in as {{.PersonaName}}</span>
 {{else}}
-<a href="/login">Login</a>
+<a href="{{.RootURL}}login/">Login</a>
 {{end}}
