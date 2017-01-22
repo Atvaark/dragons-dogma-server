@@ -1,12 +1,14 @@
-package game
+package network
 
 import (
 	"testing"
 	"time"
+
+	"github.com/atvaark/dragons-dogma-server/modules/game"
 )
 
 func TestOnlineUrDragonPropertyRoundtrip(t *testing.T) {
-	dragon := NewOnlineUrDragon()
+	dragon := game.NewOnlineUrDragon()
 	dragon.Generation = 5
 	dragon.FightCount = 1234
 	dragon.SpawnTime, _ = time.Parse("2006-01-02T15:04:05Z", "2006-01-02T15:04:05Z")
@@ -17,10 +19,10 @@ func TestOnlineUrDragonPropertyRoundtrip(t *testing.T) {
 		dragon.Hearts[i].MaxHealth = dragon.Hearts[i].MaxHealth + uint32(i)
 	}
 
-	props := dragon.NetworkProperties()
+	props := GetDragonProperties(dragon)
 
-	parsedDragon := NewOnlineUrDragon()
-	parsedDragon.SetNetworkProperties(props)
+	parsedDragon := game.NewOnlineUrDragon()
+	SetDragonProperties(parsedDragon, props)
 
 	if parsedDragon.Generation != dragon.Generation {
 		t.Errorf("Generation mismatch %d %d", parsedDragon.Generation, dragon.Generation)

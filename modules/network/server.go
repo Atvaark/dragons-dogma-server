@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"sync/atomic"
+
+	"github.com/atvaark/dragons-dogma-server/modules/game"
 )
 
 type Server struct {
@@ -83,10 +85,9 @@ func handleConnection(conn net.Conn, connID int64) {
 
 	log.Printf("%v connected\n", client)
 
-	err = disconnect(client)
+	err = handleClient(client)
 	if err != nil {
-		log.Printf("%v disconnect failed: %v\n", client, err)
-		return
+		log.Printf("%v failed to handle request: %v\n", client, err)
 	}
 
 	log.Printf("%v disconnected\n", client)
@@ -161,8 +162,48 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 	return client, nil
 }
 
-func disconnect(conn *ClientConn) error {
-	err := conn.Send(&DisconnectionNotification{})
+func handleClient(client *ClientConn) error {
+	for {
+		request, err := client.Recv()
+		if err != nil {
+			return err
+		}
+
+		switch r := request.(type) {
+		case *TusCommonAreaAcquisitionRequest:
+			// TODO: Create global Ur Dragon
+			dragon := game.NewOnlineUrDragon()
+			dragonProps, err := GetDragonPropertiesFilter(dragon, r.PropertyIndices)
+			if err != nil {
+				// TODO: Return an error packet to the client
+				return err
+			}
+			err = client.Send(&TusCommonAreaAcquisitionResponse{PropertyPacket{Properties: dragonProps}})
+			if err != nil {
+				return err
+			}
+		//case *TusCommonAreaAddRequest:
+		//case *TusCommonAreaSettingsRequest:
+		case *DisconnectionRequest:
+			err = client.Send(&DisconnectionResponse{BooleanPacket{Value: true}})
+			if err != nil {
+				return err
+			}
+			return nil
+		default:
+			fmt.Printf("unhandled request: %v", request)
+
+			err = disconnect(client)
+			if err != nil {
+				log.Printf("%v disconnect failed: %v\n", client, err)
+				return err
+			}
+		}
+	}
+}
+
+func disconnect(client *ClientConn) error {
+	err := client.Send(&DisconnectionNotification{})
 	if err != nil {
 		return err
 	}
