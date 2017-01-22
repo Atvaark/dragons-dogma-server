@@ -1,7 +1,13 @@
 package auth
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"net/http"
@@ -83,16 +89,20 @@ const sessionCookieName = "session"
 type SessionHandler struct {
 	sessionStore    *SessionStore
 	sessionDuration time.Duration
+	hashKey         []byte
+	cipherKey       []byte
 }
 
 func NewSessionHandler(sessionStore *SessionStore) *SessionHandler {
 	return &SessionHandler{
 		sessionStore:    sessionStore,
-		sessionDuration: 5 * time.Minute, // TODO: Configure
+		sessionDuration: 5 * time.Minute, // TODO: Configure duration and keys
+		hashKey:         make([]byte, 32),
+		cipherKey:       make([]byte, 32),
 	}
 }
 
-func (h *SessionHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamUser, bool) {
+func (h *SessionHandler) GetSessionCookie(w http.ResponseWriter, r *http.Request) (*steamUser, bool) {
 	// TODO: Decrypt/Validate the cookie
 	var sessionCookie *http.Cookie
 	for _, c := range r.Cookies() {
@@ -103,7 +113,12 @@ func (h *SessionHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamU
 	}
 
 	if sessionCookie != nil {
-		session, ok := h.sessionStore.Fetch(sessionCookie.Value)
+		value, err := h.decrypt(sessionCookie.Value)
+		if err != nil {
+			return nil, false
+		}
+
+		session, ok := h.sessionStore.Fetch(value)
 		if ok {
 			user, ok := session.Value.(*steamUser)
 			if ok {
@@ -116,7 +131,6 @@ func (h *SessionHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamU
 }
 
 func (h *SessionHandler) SetSessionCookie(w http.ResponseWriter, profile *steamUser) error {
-	// TODO: Encrypt/Sign the cookie
 	session, err := NewSession(h.sessionDuration)
 	if err != nil {
 		return errors.New("could not create session")
@@ -124,8 +138,99 @@ func (h *SessionHandler) SetSessionCookie(w http.ResponseWriter, profile *steamU
 
 	session.Value = profile
 	h.sessionStore.Save(session)
-	sessionCookie := &http.Cookie{Name: sessionCookieName, Value: session.ID, Path: "/", Expires: session.expiration, HttpOnly: true}
+
+	value, err := h.encrypt(session.ID)
+	if err != nil {
+		return errors.New("could not encrypt session id")
+	}
+
+	sessionCookie := &http.Cookie{Name: sessionCookieName, Value: value, Path: "/", Expires: session.expiration, HttpOnly: true}
 	http.SetCookie(w, sessionCookie)
 
 	return nil
+}
+
+func (h *SessionHandler) encrypt(value string) (string, error) {
+	hash := hmac.New(sha256.New, h.hashKey)
+	c, err := aes.NewCipher(h.cipherKey)
+	if err != nil {
+		return "", err
+	}
+
+	// serialize value
+	v := []byte(value)
+
+	// generate IV
+	iv := make([]byte, c.BlockSize())
+	_, err = rand.Read(iv)
+	if err != nil {
+		return "", err
+	}
+
+	// encrypt value
+	stream := cipher.NewCTR(c, iv)
+	stream.XORKeyStream(v, v)
+
+	// merge IV and value
+	v = append(iv, v...)
+
+	// create HMAC
+	hash.Write(v)
+	mac := hash.Sum(nil)
+
+	// merge HMAC and value
+	v = append(mac, v...)
+
+	// encode
+	v64 := base64.URLEncoding.EncodeToString(v)
+
+	return v64, nil
+}
+
+func (h *SessionHandler) decrypt(value string) (string, error) {
+	hash := hmac.New(sha256.New, h.hashKey)
+	c, err := aes.NewCipher(h.cipherKey)
+	if err != nil {
+		return "", err
+	}
+
+	// decode
+	v, err := base64.URLEncoding.DecodeString(value)
+	if err != nil {
+		return "", err
+	}
+
+	// split HMAC and value
+	if len(v) < hash.Size() {
+		return "", errors.New("missing HMAC")
+	}
+
+	expectedMac := v[:hash.Size()]
+	v = v[hash.Size():]
+
+	// validate HMAC
+	hash.Write(v)
+	mac := hash.Sum(nil)
+
+	if subtle.ConstantTimeCompare(expectedMac, mac) != 1 {
+		return "", errors.New("HMAC mismatch")
+	}
+
+	// split IV and value
+	ivLen := c.BlockSize()
+	if len(v) < ivLen {
+		return "", errors.New("missing IV")
+	}
+
+	iv := v[:ivLen]
+	v = v[ivLen:]
+
+	// decrypt value
+	s := cipher.NewCTR(c, iv)
+	s.XORKeyStream(v, v)
+
+	// deserialize value
+	val := string(v)
+
+	return val, nil
 }

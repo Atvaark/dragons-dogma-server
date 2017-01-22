@@ -61,7 +61,7 @@ type homeModel struct {
 }
 
 func (h *homeHandler) handle(w http.ResponseWriter, r *http.Request) {
-	profile, _ := h.sessionHandler.Handle(w, r)
+	profile, _ := h.sessionHandler.GetSessionCookie(w, r)
 
 	var model homeModel
 	if profile != nil {
@@ -85,7 +85,7 @@ type loginModel struct {
 
 func (h *loginHandler) handle(w http.ResponseWriter, r *http.Request) {
 	var err error
-	profile, loggedIn := h.sessionHandler.Handle(w, r)
+	profile, loggedIn := h.sessionHandler.GetSessionCookie(w, r)
 	if !loggedIn {
 		profile, err = h.authHandler.Handle(w, r)
 		if _, redirect := err.(*auth.Redirect); redirect {
