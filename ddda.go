@@ -16,7 +16,6 @@ func main() {
 	app.Version = AppVersion
 	app.Commands = []cli.Command{
 		cmd.WebCommand,
-		cmd.CertCommand,
 	}
 
 	app.Run(os.Args)
