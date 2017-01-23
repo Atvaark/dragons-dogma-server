@@ -163,6 +163,9 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 }
 
 func handleClient(client *ClientConn) error {
+	// TODO: Create global Ur Dragon
+	dragon := game.NewOnlineUrDragon()
+
 	for {
 		request, err := client.Recv()
 		if err != nil {
@@ -171,8 +174,6 @@ func handleClient(client *ClientConn) error {
 
 		switch r := request.(type) {
 		case *TusCommonAreaAcquisitionRequest:
-			// TODO: Create global Ur Dragon
-			dragon := game.NewOnlineUrDragon()
 			dragonProps, err := GetDragonPropertiesFilter(dragon, r.PropertyIndices)
 			if err != nil {
 				// TODO: Return an error packet to the client

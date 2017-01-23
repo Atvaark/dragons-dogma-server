@@ -102,8 +102,7 @@ func NewSessionHandler(sessionStore *SessionStore) *SessionHandler {
 	}
 }
 
-func (h *SessionHandler) GetSessionCookie(w http.ResponseWriter, r *http.Request) (*steamUser, bool) {
-	// TODO: Decrypt/Validate the cookie
+func (h *SessionHandler) GetSessionCookie(w http.ResponseWriter, r *http.Request) (*User, bool) {
 	var sessionCookie *http.Cookie
 	for _, c := range r.Cookies() {
 		if c.Name == sessionCookieName {
@@ -120,7 +119,7 @@ func (h *SessionHandler) GetSessionCookie(w http.ResponseWriter, r *http.Request
 
 		session, ok := h.sessionStore.Fetch(value)
 		if ok {
-			user, ok := session.Value.(*steamUser)
+			user, ok := session.Value.(*User)
 			if ok {
 				return user, true
 			}
@@ -130,13 +129,13 @@ func (h *SessionHandler) GetSessionCookie(w http.ResponseWriter, r *http.Request
 	return nil, false
 }
 
-func (h *SessionHandler) SetSessionCookie(w http.ResponseWriter, profile *steamUser) error {
+func (h *SessionHandler) SetSessionCookie(w http.ResponseWriter, user *User) error {
 	session, err := NewSession(h.sessionDuration)
 	if err != nil {
 		return errors.New("could not create session")
 	}
 
-	session.Value = profile
+	session.Value = user
 	h.sessionStore.Save(session)
 
 	value, err := h.encrypt(session.ID)

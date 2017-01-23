@@ -67,13 +67,13 @@ type homeModel struct {
 }
 
 func (h *homeHandler) handle(w http.ResponseWriter, r *http.Request) {
-	profile, _ := h.sessionHandler.GetSessionCookie(w, r)
+	user, _ := h.sessionHandler.GetSessionCookie(w, r)
 
 	var model homeModel
 	model.RootURL = h.rootURL
 
-	if profile != nil {
-		model.PersonaName = profile.PersonaName
+	if user != nil {
+		model.PersonaName = user.PersonaName
 		model.LoggedIn = true
 	}
 
@@ -95,23 +95,23 @@ type loginModel struct {
 
 func (h *loginHandler) handle(w http.ResponseWriter, r *http.Request) {
 	var err error
-	profile, loggedIn := h.sessionHandler.GetSessionCookie(w, r)
+	user, loggedIn := h.sessionHandler.GetSessionCookie(w, r)
 	if !loggedIn {
-		profile, err = h.authHandler.Handle(w, r)
+		user, err = h.authHandler.Handle(w, r)
 		if _, redirect := err.(*auth.Redirect); redirect {
 			return
 		}
 
 		if err == nil {
-			h.sessionHandler.SetSessionCookie(w, profile)
+			h.sessionHandler.SetSessionCookie(w, user)
 		}
 	}
 
 	var model loginModel
 	model.RootURL = h.rootURL
 
-	if profile != nil {
-		model.PersonaName = profile.PersonaName
+	if user != nil {
+		model.PersonaName = user.PersonaName
 	}
 
 	if err != nil {

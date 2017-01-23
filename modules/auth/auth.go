@@ -20,6 +20,30 @@ const (
 
 var loginUserURL = regexp.MustCompile(`^http://steamcommunity.com/openid/id/(\d+)$`)
 
+type User struct {
+	*SteamUser
+	OwnsGame bool
+}
+
+type SteamUser struct {
+	SteamId                  string `json:"steamid"`
+	CommunityVisibilityState int    `json:"communityvisibilitystate"`
+	ProfileState             int    `json:"profilestate"`
+	PersonaName              string `json:"personaname"`
+	LastLogoff               int    `json:"lastlogoff"`
+	ProfileURL               string `json:"profileurl"`
+	Avatar                   string `json:"avatar"`
+	AvatarMedium             string `json:"avatarmedium"`
+	AvatarFull               string `json:"avatarfull"`
+	PersonaState             int    `json:"personastate"`
+	PrimaryClanId            string `json:"primaryclanid"`
+	TimeCreated              int    `json:"timecreated"`
+	PersonaStateFlags        int    `json:"personastateflags"`
+	LocCountryCode           string `json:"loccountrycode"`
+	LocStateCode             string `json:"locstatecode"`
+	LocCityId                int    `json:"loccityid"`
+}
+
 type steamId64 int64
 
 func (steamId steamId64) String() string {
@@ -38,25 +62,6 @@ type steamOpenId struct {
 	sig            string
 
 	raw url.Values
-}
-
-type steamUser struct {
-	SteamId                  string `json:"steamid"`
-	CommunityVisibilityState int    `json:"communityvisibilitystate"`
-	ProfileState             int    `json:"profilestate"`
-	PersonaName              string `json:"personaname"`
-	LastLogoff               int    `json:"lastlogoff"`
-	ProfileURL               string `json:"profileurl"`
-	Avatar                   string `json:"avatar"`
-	AvatarMedium             string `json:"avatarmedium"`
-	AvatarFull               string `json:"avatarfull"`
-	PersonaState             int    `json:"personastate"`
-	PrimaryClanId            string `json:"primaryclanid"`
-	TimeCreated              int    `json:"timecreated"`
-	PersonaStateFlags        int    `json:"personastateflags"`
-	LocCountryCode           string `json:"loccountrycode"`
-	LocStateCode             string `json:"locstatecode"`
-	LocCityId                int    `json:"loccityid"`
 }
 
 type steamGame struct {
@@ -87,17 +92,17 @@ func NewAuthHandler(rootURL string, loginPath string, steamKey string) *AuthHand
 	}
 }
 
-func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamUser, error) {
+func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) (*User, error) {
 	// OpenID flow
 	openid, openidFound := parseOpenid(r.URL.Query())
 	if !openidFound {
-		steamLogin, err := buildAuthURK(h.loginCallbackURL)
+		steamLogin, err := buildAuthURL(h.loginCallbackURL)
 		if err != nil {
 			return nil, errors.New("could not initialize steam login")
 		}
 
 		http.Redirect(w, r, steamLogin, http.StatusTemporaryRedirect)
-		return nil, &Redirect{} // TODO: return a redirect error???
+		return nil, &Redirect{}
 	}
 
 	steamId, err := validateOpenid(openid)
@@ -110,12 +115,15 @@ func (h *AuthHandler) Handle(w http.ResponseWriter, r *http.Request) (*steamUser
 		return nil, errors.New("could not fetch user profile")
 	}
 
-	_, err = checkGameOwnership(h.steamKey, steamId, dragonsDogmaAppId)
+	ownsGame, err := checkGameOwnership(h.steamKey, steamId, dragonsDogmaAppId)
 	if err != nil {
 		return nil, errors.New("could not fetch user games")
 	}
 
-	return profile, nil
+	return &User{
+		profile,
+		ownsGame,
+	}, nil
 }
 
 func parseOpenid(query url.Values) (*steamOpenId, bool) {
@@ -192,7 +200,7 @@ func validateOpenid(id *steamOpenId) (steamId64, error) {
 	return steamId64(steamId), nil
 }
 
-func buildAuthURK(callbackURL string) (string, error) {
+func buildAuthURL(callbackURL string) (string, error) {
 	callback, err := url.Parse(callbackURL)
 	if err != nil {
 		return "", err
@@ -224,7 +232,7 @@ func buildAuthURK(callbackURL string) (string, error) {
 	return steamAuthURL.String(), nil
 }
 
-func fetchUserProfile(steamKey string, steamId steamId64) (*steamUser, error) {
+func fetchUserProfile(steamKey string, steamId steamId64) (*SteamUser, error) {
 	params := make(url.Values)
 	params.Set("key", steamKey)
 	params.Set("steamids", steamId.String())
@@ -244,7 +252,7 @@ func fetchUserProfile(steamKey string, steamId steamId64) (*steamUser, error) {
 
 	type Result struct {
 		Response struct {
-			Players []steamUser `json:"players"`
+			Players []SteamUser `json:"players"`
 		} `json:"response"`
 	}
 
@@ -258,8 +266,8 @@ func fetchUserProfile(steamKey string, steamId steamId64) (*steamUser, error) {
 		return nil, errors.New("player profile not found")
 	}
 
-	p := res.Response.Players[0]
-	return &p, nil
+	player := res.Response.Players[0]
+	return &player, nil
 }
 
 func checkGameOwnership(steamKey string, steamId steamId64, appID int) (bool, error) {

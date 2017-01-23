@@ -86,7 +86,10 @@ func startGameServer(cfg *webConfig) {
 		panic(err)
 	}
 
-	srv.ListenAndServe()
+	err = srv.ListenAndServe()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func startWebServer(cfg *webConfig) {
