@@ -94,7 +94,7 @@ func handleConnection(conn net.Conn, connID int64) {
 }
 
 func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
-	client := NewClientConn(conn, connID)
+	client := NewClientConn(conn, connID, true)
 	var err error
 	var response Packet
 
@@ -108,7 +108,7 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 	}
 	fastDataResponse, ok := response.(*FastDataResponse)
 	if !ok {
-		return nil, NewPacketTypeError()
+		return nil, NewPacketTypeError(fastDataResponse, response)
 	}
 
 	client.User = fastDataResponse.User
@@ -124,7 +124,7 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 	}
 	authenticationInformationRequestHeader, ok := response.(*AuthenticationInformationRequestHeader)
 	if !ok {
-		return nil, NewPacketTypeError()
+		return nil, NewPacketTypeError(authenticationInformationRequestHeader, response)
 	}
 	_ = authenticationInformationRequestHeader
 	err = client.Send(&AuthenticationInformationResponseHeader{ChunkLength: 256})
@@ -138,7 +138,7 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 	}
 	authenticationInformationRequestData, ok := response.(*AuthenticationInformationRequestData)
 	if !ok {
-		return nil, NewPacketTypeError()
+		return nil, NewPacketTypeError(authenticationInformationRequestData, response)
 	}
 	err = client.Send(&AuthenticationInformationResponseData{DataChunkReferencePacket{ChunkLength: uint16(len(authenticationInformationRequestData.ChunkData))}})
 	if err != nil {
@@ -152,7 +152,7 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 	authenticationInformationRequestFooter, ok := response.(*AuthenticationInformationRequestFooter)
 	_ = authenticationInformationRequestFooter
 	if !ok {
-		return nil, NewPacketTypeError()
+		return nil, NewPacketTypeError(authenticationInformationRequestFooter, response)
 	}
 	err = client.Send(&AuthenticationInformationResponseFooter{BooleanPacket{Value: true}})
 	if err != nil {

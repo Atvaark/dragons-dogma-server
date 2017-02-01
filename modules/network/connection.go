@@ -11,25 +11,27 @@ import (
 	"time"
 )
 
-var serverSequenceIDRand = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+var localSequenceIDRand = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 
-func newServerSequenceID() uint16 {
-	return uint16(serverSequenceIDRand.Uint32())
+func newLocalSequenceID() uint16 {
+	return uint16(localSequenceIDRand.Uint32())
 }
 
 type ClientConn struct {
 	io.ReadWriter
 	ID               int64
 	User             string
-	ServerSequenceID uint16
-	ClientSequenceID uint16
+	LocalSequenceID  uint16
+	RemoteSequenceID uint16
+	ToRemoteClient   bool
 }
 
-func NewClientConn(rw io.ReadWriter, ID int64) *ClientConn {
+func NewClientConn(rw io.ReadWriter, ID int64, toRemoteClient bool) *ClientConn {
 	return &ClientConn{
-		ReadWriter:       rw,
-		ID:               ID,
-		ServerSequenceID: newServerSequenceID(),
+		ReadWriter:      rw,
+		ID:              ID,
+		LocalSequenceID: newLocalSequenceID(),
+		ToRemoteClient:  toRemoteClient,
 	}
 }
 
@@ -56,13 +58,11 @@ func (conn *ClientConn) Send(packet Packet) error {
 	header.Length = uint16(packetLength)
 	header.PacketType = GetPacketType(packet)
 
-	switch header.PacketType.TypeID {
-	case responseID:
-		header.SequenceID = conn.ClientSequenceID
-	case requestID:
-	case notificationID:
-		conn.ServerSequenceID++
-		header.SequenceID = conn.ServerSequenceID
+	if conn.ToRemoteClient && header.PacketType.TypeID == responseID || !conn.ToRemoteClient && header.PacketType.TypeID != responseID {
+		conn.LocalSequenceID++
+		header.SequenceID = conn.LocalSequenceID
+	} else {
+		header.SequenceID = conn.RemoteSequenceID
 	}
 
 	packet.SetHeader(header)
@@ -112,7 +112,7 @@ func (conn *ClientConn) Recv() (Packet, error) {
 		return nil, err
 	}
 
-	conn.ClientSequenceID = header.SequenceID
+	conn.RemoteSequenceID = header.SequenceID
 
 	return packet, nil
 }

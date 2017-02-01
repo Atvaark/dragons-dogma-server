@@ -3,6 +3,7 @@ package network
 import (
 	"encoding/binary"
 	"fmt"
+	"reflect"
 )
 
 const (
@@ -137,12 +138,14 @@ type DataChunkPacket struct {
 	PacketHeader
 	ChunkOffset uint32
 	_           uint16 //ChunkLength uint16
+	_           uint16 //ChunkLength uint16
 	ChunkData   []byte
 }
 
 func (p *DataChunkPacket) Payload() ([]byte, error) {
-	var payload [4]byte
-	binary.BigEndian.PutUint32(payload[:], p.ChunkOffset)
+	var payload [6]byte
+	binary.BigEndian.PutUint32(payload[:4], p.ChunkOffset)
+	binary.BigEndian.PutUint16(payload[4:6], uint16(len(p.ChunkData)))
 
 	chunkDataPayload, err := writeDynamicData(p.ChunkData[:])
 	if err != nil {
@@ -153,16 +156,16 @@ func (p *DataChunkPacket) Payload() ([]byte, error) {
 }
 
 func (p *DataChunkPacket) SetPayload(payload []byte) error {
-	const minPayloadSize = 6
+	const minPayloadSize = 8
 	if len(payload) < minPayloadSize {
 		return NewPayloadError(len(payload), minPayloadSize)
 	}
 
 	p.ChunkOffset = binary.BigEndian.Uint32(payload[0:4])
-	//p.ChunkLength = binary.BigEndian.Uint16(payload[4:6])
-
+	chunkLength := binary.BigEndian.Uint16(payload[4:6])
+	_ = chunkLength
 	var err error
-	p.ChunkData, _, err = readDynamicData(payload[4:])
+	p.ChunkData, _, err = readDynamicData(payload[6:])
 	if err != nil {
 		return err
 	}
@@ -902,8 +905,11 @@ func (e PacketTypeError) Error() string {
 	return fmt.Sprintf("invalid packet type %s expected %s", e.Actual, e.Expected)
 }
 
-func NewPacketTypeError() PacketTypeError {
-	return PacketTypeError{}
+func NewPacketTypeError(expected interface{}, actual interface{}) PacketTypeError {
+	return PacketTypeError{
+		Actual:   reflect.ValueOf(expected).Type().String(),
+		Expected: reflect.ValueOf(actual).Type().String(),
+	}
 }
 
 func readDynamicString(data []byte) (s string, n int, err error) {

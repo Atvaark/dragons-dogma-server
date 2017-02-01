@@ -19,10 +19,10 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 
 	props[0].Value2 = d.Generation
 
-	const dragonHeatsIndex = 1
+	const dragonHeartsIndex = 1
 	const heartPropCount = game.UrDragonHeartCount / 2
-	heartHealthIdx := dragonHeatsIndex
-	heartHealthMaxIdx := dragonHeatsIndex + heartPropCount
+	heartHealthIdx := dragonHeartsIndex
+	heartHealthMaxIdx := dragonHeartsIndex + heartPropCount
 	for i := 0; i < len(d.Hearts); i++ {
 		heart := &d.Hearts[i]
 
@@ -49,10 +49,14 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 
 	const Unknown1 = 17825793
 	props[35].Value1 = Unknown1
+	props[35].Value2 = 0
 	props[37].Value1 = Unknown1
+	props[37].Value2 = 0
 	props[39].Value1 = Unknown1
+	props[39].Value2 = 0
 
-	const Unknown2 = 10800
+	const Unknown2 = 10800 // Armor?
+	props[41].Value2 = Unknown2
 	props[41].Value2 = Unknown2
 
 	if !d.SpawnTime.IsZero() {
