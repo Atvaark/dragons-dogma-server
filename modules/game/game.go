@@ -6,6 +6,7 @@ import (
 
 const UrDragonHeartCount = 30
 const UrDragonHeartHealth = 10000000
+const UserIdCount = 3
 
 type OnlineUrDragon struct {
 	Generation uint32
@@ -14,6 +15,7 @@ type OnlineUrDragon struct {
 	GraceTime  time.Time
 	KillCount  uint32
 	Hearts     [UrDragonHeartCount]UrDragonHeart
+	UserIds    [UserIdCount]uint64
 }
 
 type UrDragonHeart struct {

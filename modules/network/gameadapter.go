@@ -19,15 +19,15 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 
 	props[0].Value2 = d.Generation
 
-	const dragonHeartsIndex = 1
+	const dragonHeartsHealthIndexStart = 1
 	const heartPropCount = game.UrDragonHeartCount / 2
-	heartHealthIdx := dragonHeartsIndex
-	heartHealthMaxIdx := dragonHeartsIndex + heartPropCount
+	heartHealthIndex := dragonHeartsHealthIndexStart
+	heartHealthMaxIndex := dragonHeartsHealthIndexStart + heartPropCount
 	for i := 0; i < len(d.Hearts); i++ {
 		heart := &d.Hearts[i]
 
-		healthProp := &props[heartHealthIdx]
-		healthMaxProp := &props[heartHealthMaxIdx]
+		healthProp := &props[heartHealthIndex]
+		healthMaxProp := &props[heartHealthMaxIndex]
 
 		if i%2 == 0 {
 			healthProp.Value1 = heart.Health
@@ -36,8 +36,8 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 			healthProp.Value2 = heart.Health
 			healthMaxProp.Value2 = heart.MaxHealth
 
-			heartHealthIdx++
-			heartHealthMaxIdx++
+			heartHealthIndex++
+			heartHealthMaxIndex++
 		}
 	}
 
@@ -46,17 +46,19 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 		props[32].Value2 = uint32(d.GraceTime.Unix())
 	}
 	props[33].Value2 = d.KillCount
+	// props[34] is not used
 
-	const Unknown1 = 17825793
-	props[35].Value1 = Unknown1
-	props[35].Value2 = 0
-	props[37].Value1 = Unknown1
-	props[37].Value2 = 0
-	props[39].Value1 = Unknown1
-	props[39].Value2 = 0
+	const userIdsStartIndex = 35
+	for i := 0; i < len(d.UserIds); i++ {
+		userId := d.UserIds[i]
+		userIdIdx := userIdsStartIndex + i*2
+		props[userIdIdx+0].Value1 = uint32(userId >> 32)
+		props[userIdIdx+0].Value2 = uint32(userId)
+		// props[userIdIdx+1] is not used
+	}
 
 	const Unknown2 = 10800 // Armor?
-	props[41].Value2 = Unknown2
+	props[41].Value1 = 0
 	props[41].Value2 = Unknown2
 
 	if !d.SpawnTime.IsZero() {
@@ -88,27 +90,32 @@ func GetDragonPropertiesFilter(d *game.OnlineUrDragon, indexFilter []byte) ([]Pr
 
 func SetDragonProperties(d *game.OnlineUrDragon, props []Property) {
 	const heartPropCount = game.UrDragonHeartCount / 2
-	const dragonHeartsHealthIndex = 1
-	const dragonHeartsHealthIndexEnd = dragonHeartsHealthIndex + heartPropCount
-	const dragonHeartsHealthMaxIndex = dragonHeartsHealthIndexEnd
-	const dragonHeartsHealthMaxIndexEnd = dragonHeartsHealthMaxIndex + heartPropCount
+	const dragonHeartsHealthIndexStart = 1
+	const dragonHeartsHealthIndexEnd = dragonHeartsHealthIndexStart + heartPropCount
+	const dragonHeartsHealthMaxIndexStart = dragonHeartsHealthIndexEnd
+	const dragonHeartsHealthMaxIndexEnd = dragonHeartsHealthMaxIndexStart + heartPropCount
+	const userIdsIndexStart = 35
+	const userIdPropCount = game.UserIdCount * 2
+	const userIdsIndexEnd = userIdsIndexStart + userIdPropCount
 
 	for _, prop := range props {
 		switch {
 		case prop.Index == 0:
 			d.Generation = prop.Value2
-		case prop.Index >= dragonHeartsHealthIndex && prop.Index < dragonHeartsHealthIndexEnd:
-			d.Hearts[(prop.Index-dragonHeartsHealthIndex)*2].Health = prop.Value1
-			d.Hearts[(prop.Index-dragonHeartsHealthIndex)*2+1].Health = prop.Value2
-		case prop.Index >= dragonHeartsHealthMaxIndex && prop.Index < dragonHeartsHealthMaxIndexEnd:
-			d.Hearts[(prop.Index-dragonHeartsHealthMaxIndex)*2].MaxHealth = prop.Value1
-			d.Hearts[(prop.Index-dragonHeartsHealthMaxIndex)*2+1].MaxHealth = prop.Value2
+		case prop.Index >= dragonHeartsHealthIndexStart && prop.Index < dragonHeartsHealthIndexEnd:
+			d.Hearts[(prop.Index-dragonHeartsHealthIndexStart)*2].Health = prop.Value1
+			d.Hearts[(prop.Index-dragonHeartsHealthIndexStart)*2+1].Health = prop.Value2
+		case prop.Index >= dragonHeartsHealthMaxIndexStart && prop.Index < dragonHeartsHealthMaxIndexEnd:
+			d.Hearts[(prop.Index-dragonHeartsHealthMaxIndexStart)*2].MaxHealth = prop.Value1
+			d.Hearts[(prop.Index-dragonHeartsHealthMaxIndexStart)*2+1].MaxHealth = prop.Value2
 		case prop.Index == 31:
 			d.FightCount = prop.Value2
 		case prop.Index == 32:
 			d.GraceTime = time.Unix(int64(prop.Value2), 0)
 		case prop.Index == 33:
 			d.KillCount = prop.Value2
+		case prop.Index >= userIdsIndexStart && prop.Index < userIdsIndexEnd && (prop.Index-userIdsIndexStart)%2 == 0:
+			d.UserIds[(prop.Index-userIdsIndexStart)/2] = uint64(prop.Value1)<<32 | uint64(prop.Value2)
 		case prop.Index == 42:
 			d.SpawnTime = time.Unix(int64(prop.Value2), 0)
 		}

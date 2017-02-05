@@ -18,6 +18,9 @@ func TestOnlineUrDragonPropertyRoundtrip(t *testing.T) {
 		dragon.Hearts[i].Health = dragon.Hearts[i].Health - uint32(i)
 		dragon.Hearts[i].MaxHealth = dragon.Hearts[i].MaxHealth + uint32(i)
 	}
+	for i := 0; i < len(dragon.UserIds); i++ {
+		dragon.UserIds[i] = uint64(i+1)<<32 | uint64(i+1)
+	}
 
 	props := GetDragonProperties(dragon)
 
@@ -55,6 +58,16 @@ func TestOnlineUrDragonPropertyRoundtrip(t *testing.T) {
 
 		if parsedDragon.Hearts[i].MaxHealth != dragon.Hearts[i].MaxHealth {
 			t.Errorf("heart MaxHealth mismatch %d %d %d", i, parsedDragon.Hearts[i].MaxHealth, dragon.Hearts[i].MaxHealth)
+		}
+	}
+
+	if len(parsedDragon.UserIds) != len(dragon.UserIds) {
+		t.Errorf("UserId count mismatch %d %d", len(parsedDragon.UserIds), len(dragon.UserIds))
+	}
+
+	for i := 0; i < len(parsedDragon.UserIds); i++ {
+		if parsedDragon.UserIds[i] != dragon.UserIds[i] {
+			t.Errorf("UserId mismatch %d %d %d", i, parsedDragon.UserIds[i], dragon.UserIds[i])
 		}
 	}
 }
