@@ -1,15 +1,22 @@
 package network
 
 import (
-	"time"
-
 	"fmt"
+	"time"
 
 	"github.com/atvaark/dragons-dogma-server/modules/game"
 )
 
 //const MaxProperties = 64
 const UsedProperties = 43
+
+func AllPropertyIndices() []byte {
+	var indices [UsedProperties]byte
+	for i := 0; i < len(indices); i++ {
+		indices[i] = byte(i)
+	}
+	return indices[:]
+}
 
 func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 	var props [UsedProperties]Property
@@ -42,8 +49,8 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 	}
 
 	props[31].Value2 = d.FightCount
-	if !d.GraceTime.IsZero() {
-		props[32].Value2 = uint32(d.GraceTime.Unix())
+	if !d.KillTime.IsZero() {
+		props[32].Value2 = uint32(d.KillTime.Unix())
 	}
 	props[33].Value2 = d.KillCount
 	// props[34] is not used
@@ -57,9 +64,7 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 		// props[userIdIdx+1] is not used
 	}
 
-	const Unknown2 = 10800 // Armor?
-	props[41].Value1 = 0
-	props[41].Value2 = Unknown2
+	props[41].Value2 = d.Defense
 
 	if !d.SpawnTime.IsZero() {
 		props[42].Value2 = uint32(d.SpawnTime.Unix())
@@ -111,13 +116,24 @@ func SetDragonProperties(d *game.OnlineUrDragon, props []Property) {
 		case prop.Index == 31:
 			d.FightCount = prop.Value2
 		case prop.Index == 32:
-			d.GraceTime = time.Unix(int64(prop.Value2), 0)
+			d.KillTime = nillableUnixTime(prop.Value2)
 		case prop.Index == 33:
 			d.KillCount = prop.Value2
 		case prop.Index >= userIdsIndexStart && prop.Index < userIdsIndexEnd && (prop.Index-userIdsIndexStart)%2 == 0:
 			d.UserIds[(prop.Index-userIdsIndexStart)/2] = uint64(prop.Value1)<<32 | uint64(prop.Value2)
+		case prop.Index == 41:
+			d.Defense = prop.Value2
 		case prop.Index == 42:
-			d.SpawnTime = time.Unix(int64(prop.Value2), 0)
+			d.SpawnTime = nillableUnixTime(prop.Value2)
 		}
 	}
+}
+
+func nillableUnixTime(i uint32) *time.Time {
+	if i == 0 {
+		return nil
+	}
+
+	t := time.Unix(int64(i), 0)
+	return &t
 }

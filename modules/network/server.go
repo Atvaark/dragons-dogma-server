@@ -3,7 +3,6 @@ package network
 import (
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"sync/atomic"
 
@@ -51,7 +50,7 @@ func (s *Server) ListenAndServe() error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println(err)
+			printf("%v", err)
 			continue
 		}
 
@@ -63,34 +62,34 @@ func (s *Server) ListenAndServe() error {
 func handleConnection(conn net.Conn, connID int64) {
 	defer conn.Close()
 
-	log.Printf("[%d] connecting\n", connID)
+	printf("[%d] connecting\n", connID)
 
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
-		log.Printf("[%d] no TLS connection\n", connID)
+		printf("[%d] no TLS connection\n", connID)
 		return
 	}
 
 	err := tlsConn.Handshake()
 	if err != nil {
-		log.Printf("[%d] TLS handshake failed:%v\n", connID, err)
+		printf("[%d] TLS handshake failed:%v\n", connID, err)
 		return
 	}
 
 	client, err := authenticate(tlsConn, connID)
 	if err != nil {
-		log.Printf("[%d] auth failed: %v\n", connID, err)
+		printf("[%d] auth failed: %v\n", connID, err)
 		return
 	}
 
-	log.Printf("%v connected\n", client)
+	printf("%v connected\n", client)
 
 	err = handleClient(client)
 	if err != nil {
-		log.Printf("%v failed to handle request: %v\n", client, err)
+		printf("%v failed to handle request: %v\n", client, err)
 	}
 
-	log.Printf("%v disconnected\n", client)
+	printf("%v disconnected\n", client)
 }
 
 func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
@@ -183,8 +182,10 @@ func handleClient(client *ClientConn) error {
 			if err != nil {
 				return err
 			}
-		//case *TusCommonAreaAddRequest:
-		//case *TusCommonAreaSettingsRequest:
+		case *TusCommonAreaAddRequest:
+			// TODO: Implement incrementing the fight and kill counter.
+		case *TusCommonAreaSettingsRequest:
+			// TODO: Implement overwriting the prop values.
 		case *DisconnectionRequest:
 			err = client.Send(&DisconnectionResponse{BooleanPacket{Value: true}})
 			if err != nil {
@@ -192,11 +193,11 @@ func handleClient(client *ClientConn) error {
 			}
 			return nil
 		default:
-			fmt.Printf("unhandled request: %v", request)
+			printf("unhandled request: %v", request)
 
 			err = disconnect(client)
 			if err != nil {
-				log.Printf("%v disconnect failed: %v\n", client, err)
+				printf("%v disconnect failed: %v\n", client, err)
 				return err
 			}
 		}

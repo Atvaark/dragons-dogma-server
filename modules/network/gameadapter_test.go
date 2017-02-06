@@ -7,12 +7,34 @@ import (
 	"github.com/atvaark/dragons-dogma-server/modules/game"
 )
 
+func parseNillableTime(t *testing.T, layout, value string) *time.Time {
+	v, err := time.Parse(layout, value)
+	if err != nil {
+		t.Error(err)
+	}
+
+	return &v
+}
+
+func nillableTimeEquals(t1, t2 *time.Time) bool {
+	if t1 == nil && t2 == nil {
+		return true
+	}
+
+	if t1 == nil || t2 == nil {
+		return false
+	}
+
+	return t1.Equal(*t2)
+}
+
 func TestOnlineUrDragonPropertyRoundtrip(t *testing.T) {
 	dragon := game.NewOnlineUrDragon()
 	dragon.Generation = 5
+	dragon.SpawnTime = parseNillableTime(t, "2006-01-02T15:04:05Z", "2006-01-02T15:04:05Z")
+	dragon.Defense = 100000
 	dragon.FightCount = 1234
-	dragon.SpawnTime, _ = time.Parse("2006-01-02T15:04:05Z", "2006-01-02T15:04:05Z")
-	dragon.GraceTime, _ = time.Parse("2006-01-02T15:04:05Z", "2006-01-02T16:05:06Z")
+	dragon.KillTime = parseNillableTime(t, "2006-01-02T15:04:05Z", "2006-01-02T16:05:06Z")
 	dragon.KillCount = 123
 	for i := 0; i < len(dragon.Hearts); i++ {
 		dragon.Hearts[i].Health = dragon.Hearts[i].Health - uint32(i)
@@ -31,16 +53,20 @@ func TestOnlineUrDragonPropertyRoundtrip(t *testing.T) {
 		t.Errorf("Generation mismatch %d %d", parsedDragon.Generation, dragon.Generation)
 	}
 
-	if parsedDragon.FightCount != dragon.FightCount {
-		t.Errorf("FightCount mismatch %d %d", parsedDragon.FightCount, dragon.FightCount)
+	if parsedDragon.Defense != dragon.Defense {
+		t.Errorf("Defense mismatch %d %d", parsedDragon.Defense, dragon.Defense)
 	}
 
-	if !parsedDragon.SpawnTime.Equal(dragon.SpawnTime) {
+	if !nillableTimeEquals(parsedDragon.SpawnTime, dragon.SpawnTime) {
 		t.Errorf("SpawnTime mismatch %v %v", parsedDragon.SpawnTime, dragon.SpawnTime)
 	}
 
-	if !parsedDragon.GraceTime.Equal(dragon.GraceTime) {
-		t.Errorf("GraceTime mismatch %v %v", parsedDragon.GraceTime, dragon.GraceTime)
+	if !nillableTimeEquals(parsedDragon.KillTime, dragon.KillTime) {
+		t.Errorf("KillTime mismatch %v %v", parsedDragon.KillTime, dragon.KillTime)
+	}
+
+	if parsedDragon.FightCount != dragon.FightCount {
+		t.Errorf("FightCount mismatch %d %d", parsedDragon.FightCount, dragon.FightCount)
 	}
 
 	if parsedDragon.KillCount != dragon.KillCount {

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -88,6 +89,22 @@ func runTest(ctx *cli.Context) {
 	})
 
 	err = client.Connect()
+	if err != nil {
+		panic(err)
+	}
+
+	dragon, err := client.GetOnlineUrDragon()
+	if err != nil {
+		panic(err)
+	}
+
+	dragonJson, err := json.MarshalIndent(dragon, "", "    ")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(dragonJson))
+
+	err = client.Disconnect()
 	if err != nil {
 		panic(err)
 	}
