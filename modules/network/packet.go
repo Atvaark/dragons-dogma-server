@@ -902,13 +902,13 @@ type PacketTypeError struct {
 }
 
 func (e PacketTypeError) Error() string {
-	return fmt.Sprintf("invalid packet type %s expected %s", e.Actual, e.Expected)
+	return fmt.Sprintf("invalid packet type '%s', expected '%s'", e.Actual, e.Expected)
 }
 
 func NewPacketTypeError(expected interface{}, actual interface{}) PacketTypeError {
 	return PacketTypeError{
-		Actual:   reflect.ValueOf(expected).Type().String(),
-		Expected: reflect.ValueOf(actual).Type().String(),
+		Expected: reflect.ValueOf(expected).Type().String(),
+		Actual:   reflect.ValueOf(actual).Type().String(),
 	}
 }
 

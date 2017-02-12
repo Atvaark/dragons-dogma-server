@@ -17,6 +17,7 @@ func main() {
 	app.Commands = []cli.Command{
 		cmd.WebCommand,
 		cmd.TestCommand,
+		cmd.ApiCommand,
 	}
 
 	app.Run(os.Args)

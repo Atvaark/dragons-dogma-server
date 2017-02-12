@@ -9,14 +9,14 @@ const UrDragonHeartHealth = 10000000
 const UserIdCount = 3
 
 type OnlineUrDragon struct {
-	Generation uint32
-	SpawnTime  *time.Time
-	Defense    uint32
-	FightCount uint32
-	KillTime   *time.Time
-	KillCount  uint32
-	Hearts     [UrDragonHeartCount]UrDragonHeart
-	UserIds    [UserIdCount]uint64
+	Generation  uint32
+	SpawnTime   *time.Time
+	Defense     uint32
+	FightCount  uint32
+	KillTime    *time.Time
+	KillCount   uint32
+	Hearts      [UrDragonHeartCount]UrDragonHeart
+	PawnUserIDs [UserIdCount]uint64
 }
 
 type UrDragonHeart struct {

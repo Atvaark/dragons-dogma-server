@@ -56,8 +56,8 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 	// props[34] is not used
 
 	const userIdsStartIndex = 35
-	for i := 0; i < len(d.UserIds); i++ {
-		userId := d.UserIds[i]
+	for i := 0; i < len(d.PawnUserIDs); i++ {
+		userId := d.PawnUserIDs[i]
 		userIdIdx := userIdsStartIndex + i*2
 		props[userIdIdx+0].Value1 = uint32(userId >> 32)
 		props[userIdIdx+0].Value2 = uint32(userId)
@@ -120,7 +120,7 @@ func SetDragonProperties(d *game.OnlineUrDragon, props []Property) {
 		case prop.Index == 33:
 			d.KillCount = prop.Value2
 		case prop.Index >= userIdsIndexStart && prop.Index < userIdsIndexEnd && (prop.Index-userIdsIndexStart)%2 == 0:
-			d.UserIds[(prop.Index-userIdsIndexStart)/2] = uint64(prop.Value1)<<32 | uint64(prop.Value2)
+			d.PawnUserIDs[(prop.Index-userIdsIndexStart)/2] = uint64(prop.Value1)<<32 | uint64(prop.Value2)
 		case prop.Index == 41:
 			d.Defense = prop.Value2
 		case prop.Index == 42:
