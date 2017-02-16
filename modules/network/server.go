@@ -6,17 +6,19 @@ import (
 	"net"
 	"sync/atomic"
 
-	"github.com/atvaark/dragons-dogma-server/modules/game"
+	"github.com/atvaark/dragons-dogma-server/modules/db"
 )
 
 type Server struct {
-	config ServerConfig
+	config   ServerConfig
+	database db.Database
 }
 
 type ServerConfig struct {
-	Port     int
-	CertFile string
-	KeyFile  string
+	Port         int
+	CertFile     string
+	KeyFile      string
+	DatabaseFile string
 
 	tlsConfig tls.Config
 }
@@ -34,8 +36,14 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 		MaxVersion: tls.VersionTLS10,
 	}
 
+	database, err := db.NewDatabase(cfg.DatabaseFile)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Server{
-		config: cfg,
+		config:   cfg,
+		database: database,
 	}, nil
 }
 
@@ -55,11 +63,11 @@ func (s *Server) ListenAndServe() error {
 		}
 
 		connID := atomic.AddInt64(&nextConnID, 1)
-		go handleConnection(conn, connID)
+		go s.handleConnection(conn, connID)
 	}
 }
 
-func handleConnection(conn net.Conn, connID int64) {
+func (s *Server) handleConnection(conn net.Conn, connID int64) {
 	defer conn.Close()
 
 	printf("[%d] connecting\n", connID)
@@ -84,7 +92,7 @@ func handleConnection(conn net.Conn, connID int64) {
 
 	printf("%v connected\n", client)
 
-	err = handleClient(client)
+	err = s.handleClient(client)
 	if err != nil {
 		printf("%v failed to handle request: %v\n", client, err)
 	}
@@ -161,9 +169,8 @@ func authenticate(conn *tls.Conn, connID int64) (*ClientConn, error) {
 	return client, nil
 }
 
-func handleClient(client *ClientConn) error {
-	// TODO: Create global Ur Dragon
-	dragon := game.NewOnlineUrDragon()
+func (s *Server) handleClient(client *ClientConn) error {
+	// TODO: Return an error packet to the client in case of errors
 
 	for {
 		request, err := client.Recv()
@@ -173,9 +180,13 @@ func handleClient(client *ClientConn) error {
 
 		switch r := request.(type) {
 		case *TusCommonAreaAcquisitionRequest:
+			dragon, err := s.database.GetOnlineUrDragon()
+			if err != nil {
+				return err
+			}
+
 			dragonProps, err := GetDragonPropertiesFilter(dragon, r.PropertyIndices)
 			if err != nil {
-				// TODO: Return an error packet to the client
 				return err
 			}
 			err = client.Send(&TusCommonAreaAcquisitionResponse{PropertyPacket{Properties: dragonProps}})

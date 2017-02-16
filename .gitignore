@@ -29,3 +29,9 @@ _testmain.go
 
 # External packages folder
 vendor/
+
+# dragons-dogma-server databases and keys
+*.db
+*.db.lock
+*.crt
+*.key

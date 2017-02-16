@@ -10,19 +10,21 @@ import (
 )
 
 const (
-	webPortFlagName     = "webPort"
-	webSteamKeyFlagName = "webSteamKey"
-	webRootURLFlagName  = "webRootURL"
-	gamePortFlagName    = "gamePort"
-	gameCertFileName    = "gameCertFile"
-	gameKeyFileName     = "gameKeyFile"
+	webPortFlagName      = "webPort"
+	webSteamKeyFlagName  = "webSteamKey"
+	webRootURLFlagName   = "webRootURL"
+	gamePortFlagName     = "gamePort"
+	gameCertFileName     = "gameCertFile"
+	gameKeyFileName      = "gameKeyFile"
+	gameDatabaseFileName = "gameDatabaseFile"
 
-	webPortFlagDefault  = 12500
-	webSteamKeyDefault  = ""
-	webRootURLDefault   = "http://localhost"
-	gamePortFlagDefault = 12501
-	gameCertFileDefault = "server.crt"
-	gameKeyFileDefault  = "server.key"
+	webPortFlagDefault      = 12500
+	webSteamKeyDefault      = ""
+	webRootURLDefault       = "http://localhost"
+	gamePortFlagDefault     = 12501
+	gameCertFileDefault     = "server.crt"
+	gameKeyFileDefault      = "server.key"
+	gameDatabaseFileDefault = "server.db"
 )
 
 var WebCommand = cli.Command{
@@ -35,17 +37,19 @@ var WebCommand = cli.Command{
 		cli.IntFlag{Name: gamePortFlagName, Value: gamePortFlagDefault},
 		cli.StringFlag{Name: gameCertFileName, Value: gameCertFileDefault},
 		cli.StringFlag{Name: gameKeyFileName, Value: gameKeyFileDefault},
+		cli.StringFlag{Name: gameDatabaseFileName, Value: gameDatabaseFileDefault},
 	},
 	Action: runWeb,
 }
 
 type webConfig struct {
-	webPort      int
-	webSteamKey  string
-	webRootURL   string
-	gamePort     int
-	gameCertFile string
-	gameKeyFile  string
+	webPort          int
+	webSteamKey      string
+	webRootURL       string
+	gamePort         int
+	gameCertFile     string
+	gameKeyFile      string
+	gameDatabaseFile string
 }
 
 func (cfg *webConfig) parse(ctx *cli.Context) {
@@ -55,6 +59,7 @@ func (cfg *webConfig) parse(ctx *cli.Context) {
 	cfg.gamePort = ctx.Int(gamePortFlagName)
 	cfg.gameCertFile = ctx.String(gameCertFileName)
 	cfg.gameKeyFile = ctx.String(gameKeyFileName)
+	cfg.gameDatabaseFile = ctx.String(gameDatabaseFileName)
 
 	if cfg.webRootURL == webRootURLDefault && cfg.webPort != 80 {
 		cfg.webRootURL += fmt.Sprintf(":%d", cfg.webPort)
@@ -76,9 +81,10 @@ func runWeb(ctx *cli.Context) {
 
 func startGameServer(cfg *webConfig) {
 	srvConfig := network.ServerConfig{
-		Port:     cfg.gamePort,
-		CertFile: cfg.gameCertFile,
-		KeyFile:  cfg.gameKeyFile,
+		Port:         cfg.gamePort,
+		CertFile:     cfg.gameCertFile,
+		KeyFile:      cfg.gameKeyFile,
+		DatabaseFile: cfg.gameDatabaseFile,
 	}
 
 	srv, err := network.NewServer(srvConfig)

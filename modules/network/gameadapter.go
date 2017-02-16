@@ -49,7 +49,7 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 	}
 
 	props[31].Value2 = d.FightCount
-	if !d.KillTime.IsZero() {
+	if d.KillTime != nil {
 		props[32].Value2 = uint32(d.KillTime.Unix())
 	}
 	props[33].Value2 = d.KillCount
@@ -66,7 +66,7 @@ func GetDragonProperties(d *game.OnlineUrDragon) []Property {
 
 	props[41].Value2 = d.Defense
 
-	if !d.SpawnTime.IsZero() {
+	if d.SpawnTime != nil {
 		props[42].Value2 = uint32(d.SpawnTime.Unix())
 	}
 
