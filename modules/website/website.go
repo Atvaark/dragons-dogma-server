@@ -9,7 +9,8 @@ import (
 )
 
 type Website struct {
-	config WebsiteConfig
+	config   WebsiteConfig
+	database auth.Database
 }
 
 type AuthConfig struct {
@@ -27,13 +28,15 @@ var (
 	loginTemplate = template.Must(template.New("login.tmpl").ParseFiles("templates/login.tmpl"))
 )
 
-func NewWebsite(cfg WebsiteConfig) *Website {
-	return &Website{cfg}
+func NewWebsite(cfg WebsiteConfig, database auth.Database) *Website {
+	return &Website{
+		config:   cfg,
+		database: database,
+	}
 }
 
 func (w *Website) ListenAndServe() error {
-	sessionStore := auth.NewSessionStore()
-	sessionHandler := auth.NewSessionHandler(sessionStore)
+	sessionHandler := auth.NewSessionHandler(w.database)
 	authHandler := auth.NewAuthHandler(w.config.RootURL, "/login/", w.config.AuthConfig.SteamKey)
 	homeHandler := &homeHandler{w.config.RootURL, "/", sessionHandler}
 	loginHandler := &loginHandler{w.config.RootURL, "/login/", sessionHandler, authHandler}

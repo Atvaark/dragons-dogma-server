@@ -6,39 +6,32 @@ import (
 	"net"
 	"sync/atomic"
 
-	"github.com/atvaark/dragons-dogma-server/modules/db"
+	"github.com/atvaark/dragons-dogma-server/modules/game"
 )
 
 type Server struct {
 	config   ServerConfig
-	database db.Database
+	database game.Database
 }
 
 type ServerConfig struct {
-	Port         int
-	CertFile     string
-	KeyFile      string
-	DatabaseFile string
-
-	tlsConfig tls.Config
+	Port      int
+	CertFile  string
+	KeyFile   string
+	tlsConfig *tls.Config
 }
 
-func NewServer(cfg ServerConfig) (*Server, error) {
+func NewServer(cfg ServerConfig, database game.Database) (*Server, error) {
 	cert, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.tlsConfig = tls.Config{
+	cfg.tlsConfig = &tls.Config{
 		Certificates: []tls.Certificate{
 			cert,
 		},
 		MaxVersion: tls.VersionTLS10,
-	}
-
-	database, err := db.NewDatabase(cfg.DatabaseFile)
-	if err != nil {
-		return nil, err
 	}
 
 	return &Server{
@@ -49,7 +42,7 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 
 func (s *Server) ListenAndServe() error {
 	port := fmt.Sprintf(":%d", s.config.Port)
-	listener, err := tls.Listen("tcp", port, &s.config.tlsConfig)
+	listener, err := tls.Listen("tcp", port, s.config.tlsConfig)
 	if err != nil {
 		return err
 	}

@@ -7,14 +7,15 @@ import (
 	"io"
 	"time"
 
+	"github.com/atvaark/dragons-dogma-server/modules/auth"
 	"github.com/atvaark/dragons-dogma-server/modules/game"
 	"github.com/boltdb/bolt"
 )
 
 type Database interface {
 	io.Closer
-	GetOnlineUrDragon() (*game.OnlineUrDragon, error)
-	PutOnlineUrDragon(*game.OnlineUrDragon) error
+	game.Database
+	auth.Database
 }
 
 type boltDB struct {
@@ -39,7 +40,13 @@ func NewDatabase(path string) (Database, error) {
 
 func (db *boltDB) init() error {
 	err := db.innerDB.Update(func(tx *bolt.Tx) error {
-		err := initDragonBucket(tx)
+		var err error
+		err = initDragonBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		err = initSessionBucket(tx)
 		if err != nil {
 			return err
 		}
@@ -147,6 +154,101 @@ func putOnlineUrDragonInternal(b *bolt.Bucket, dragon *game.OnlineUrDragon) erro
 	err = b.Put(dragonBucketKey, v)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+var (
+	sessionBucketName = []byte("session")
+)
+
+func initSessionBucket(tx *bolt.Tx) error {
+	b := tx.Bucket(sessionBucketName)
+	if b == nil {
+		_, err := tx.CreateBucket(sessionBucketName)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *boltDB) GetSession(ID string) (session *auth.Session, err error) {
+	err = db.innerDB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(sessionBucketName)
+		if b == nil {
+			return errors.New("database not initialized")
+		}
+
+		v := b.Get([]byte(ID))
+		if v == nil {
+			return fmt.Errorf("session '%s' not found", ID)
+		}
+
+		var s auth.Session
+		err = json.Unmarshal(v, &s)
+		if err != nil {
+			return err
+		}
+
+		session = &s
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("could not retrieve the session: %v", err)
+	}
+
+	return session, nil
+}
+
+func (db *boltDB) PutSession(session *auth.Session) error {
+	err := db.innerDB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(sessionBucketName)
+		if b == nil {
+			return errors.New("database not initialized")
+		}
+
+		v, err := json.Marshal(session)
+		if err != nil {
+			return err
+		}
+
+		err = b.Put([]byte(session.ID), v)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("could not save the session: %v", err)
+	}
+
+	return nil
+}
+
+func (db *boltDB) DeleteSession(ID string) error {
+	err := db.innerDB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(sessionBucketName)
+		if b == nil {
+			return errors.New("database not initialized")
+		}
+
+		err := b.Delete([]byte(ID))
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("could not delete the session: %v", err)
 	}
 
 	return nil

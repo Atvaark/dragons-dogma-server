@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -19,12 +18,12 @@ const sessionIDSize = 16
 
 type Session struct {
 	ID         string
-	Value      interface{}
-	createdAt  time.Time
-	expiration time.Time
+	User       *User
+	CreatedAt  time.Time
+	Expiration time.Time
 }
 
-func NewSession(duration time.Duration) (Session, error) {
+func NewSession(duration time.Duration, user *User) (Session, error) {
 	ID, err := genSessionID()
 	if err != nil {
 		return Session{}, err
@@ -32,8 +31,9 @@ func NewSession(duration time.Duration) (Session, error) {
 
 	var session Session
 	session.ID = ID
-	session.createdAt = time.Now().UTC()
-	session.expiration = session.createdAt.Add(duration)
+	session.User = user
+	session.CreatedAt = time.Now().UTC()
+	session.Expiration = session.CreatedAt.Add(duration)
 	return session, nil
 }
 
@@ -48,54 +48,24 @@ func genSessionID() (string, error) {
 	return hex.EncodeToString(ID[:]), nil
 }
 
-type SessionStore struct {
-	store map[string]Session
-	mutex sync.RWMutex
-}
-
-func NewSessionStore() *SessionStore {
-	return &SessionStore{
-		store: make(map[string]Session),
-	}
-}
-
-func (s *SessionStore) Fetch(ID string) (Session, bool) {
-	s.mutex.RLock()
-	session, ok := s.store[ID]
-	s.mutex.RUnlock()
-
-	if !ok {
-		return session, false
-	}
-
-	if session.expiration.Before(time.Now().UTC()) {
-		s.mutex.Lock()
-		defer s.mutex.Unlock()
-		delete(s.store, ID)
-		return session, false
-	}
-
-	return session, ok
-}
-
-func (s *SessionStore) Save(session Session) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.store[session.ID] = session
+type Database interface {
+	GetSession(ID string) (*Session, error)
+	PutSession(*Session) error
+	DeleteSession(ID string) error
 }
 
 const sessionCookieName = "session"
 
 type SessionHandler struct {
-	sessionStore    *SessionStore
+	database        Database
 	sessionDuration time.Duration
 	hashKey         []byte
 	cipherKey       []byte
 }
 
-func NewSessionHandler(sessionStore *SessionStore) *SessionHandler {
+func NewSessionHandler(database Database) *SessionHandler {
 	return &SessionHandler{
-		sessionStore:    sessionStore,
+		database:        database,
 		sessionDuration: 5 * time.Minute, // TODO: Configure duration and keys
 		hashKey:         make([]byte, 32),
 		cipherKey:       make([]byte, 32),
@@ -117,12 +87,17 @@ func (h *SessionHandler) GetSessionCookie(w http.ResponseWriter, r *http.Request
 			return nil, false
 		}
 
-		session, ok := h.sessionStore.Fetch(value)
-		if ok {
-			user, ok := session.Value.(*User)
-			if ok {
-				return user, true
-			}
+		session, err := h.database.GetSession(value)
+		if err != nil {
+			return nil, false
+		}
+
+		if session.Expiration.Before(time.Now().UTC()) {
+			return nil, false
+		}
+
+		if session.User != nil {
+			return session.User, true
 		}
 	}
 
@@ -130,20 +105,22 @@ func (h *SessionHandler) GetSessionCookie(w http.ResponseWriter, r *http.Request
 }
 
 func (h *SessionHandler) SetSessionCookie(w http.ResponseWriter, user *User) error {
-	session, err := NewSession(h.sessionDuration)
+	session, err := NewSession(h.sessionDuration, user)
 	if err != nil {
 		return errors.New("could not create session")
 	}
 
-	session.Value = user
-	h.sessionStore.Save(session)
+	err = h.database.PutSession(&session)
+	if err != nil {
+		return errors.New("could not save session")
+	}
 
 	value, err := h.encrypt(session.ID)
 	if err != nil {
 		return errors.New("could not encrypt session id")
 	}
 
-	sessionCookie := &http.Cookie{Name: sessionCookieName, Value: value, Path: "/", Expires: session.expiration, HttpOnly: true}
+	sessionCookie := &http.Cookie{Name: sessionCookieName, Value: value, Path: "/", Expires: session.Expiration, HttpOnly: true}
 	http.SetCookie(w, sessionCookie)
 
 	return nil

@@ -57,3 +57,8 @@ func (dragon *OnlineUrDragon) NextGeneration() *OnlineUrDragon {
 
 	return &next
 }
+
+type Database interface {
+	GetOnlineUrDragon() (*OnlineUrDragon, error)
+	PutOnlineUrDragon(*OnlineUrDragon) error
+}

@@ -2,29 +2,32 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"strings"
 
+	"github.com/atvaark/dragons-dogma-server/modules/db"
 	"github.com/atvaark/dragons-dogma-server/modules/network"
 	"github.com/atvaark/dragons-dogma-server/modules/website"
 	"github.com/urfave/cli"
-	"strings"
 )
 
 const (
-	webPortFlagName      = "webPort"
-	webSteamKeyFlagName  = "webSteamKey"
-	webRootURLFlagName   = "webRootURL"
-	gamePortFlagName     = "gamePort"
-	gameCertFileName     = "gameCertFile"
-	gameKeyFileName      = "gameKeyFile"
-	gameDatabaseFileName = "gameDatabaseFile"
+	webPortFlagName     = "webPort"
+	webSteamKeyFlagName = "webSteamKey"
+	webRootURLFlagName  = "webRootURL"
+	gamePortFlagName    = "gamePort"
+	gameCertFileName    = "gameCertFile"
+	gameKeyFileName     = "gameKeyFile"
+	databaseFileName    = "databaseFile"
 
-	webPortFlagDefault      = 12500
-	webSteamKeyDefault      = ""
-	webRootURLDefault       = "http://localhost"
-	gamePortFlagDefault     = 12501
-	gameCertFileDefault     = "server.crt"
-	gameKeyFileDefault      = "server.key"
-	gameDatabaseFileDefault = "server.db"
+	webPortFlagDefault  = 12500
+	webSteamKeyDefault  = ""
+	webRootURLDefault   = "http://localhost"
+	gamePortFlagDefault = 12501
+	gameCertFileDefault = "server.crt"
+	gameKeyFileDefault  = "server.key"
+	databaseFileDefault = "server.db"
 )
 
 var WebCommand = cli.Command{
@@ -37,19 +40,19 @@ var WebCommand = cli.Command{
 		cli.IntFlag{Name: gamePortFlagName, Value: gamePortFlagDefault},
 		cli.StringFlag{Name: gameCertFileName, Value: gameCertFileDefault},
 		cli.StringFlag{Name: gameKeyFileName, Value: gameKeyFileDefault},
-		cli.StringFlag{Name: gameDatabaseFileName, Value: gameDatabaseFileDefault},
+		cli.StringFlag{Name: databaseFileName, Value: databaseFileDefault},
 	},
 	Action: runWeb,
 }
 
 type webConfig struct {
-	webPort          int
-	webSteamKey      string
-	webRootURL       string
-	gamePort         int
-	gameCertFile     string
-	gameKeyFile      string
-	gameDatabaseFile string
+	webPort      int
+	webSteamKey  string
+	webRootURL   string
+	gamePort     int
+	gameCertFile string
+	gameKeyFile  string
+	databaseFile string
 }
 
 func (cfg *webConfig) parse(ctx *cli.Context) {
@@ -59,7 +62,7 @@ func (cfg *webConfig) parse(ctx *cli.Context) {
 	cfg.gamePort = ctx.Int(gamePortFlagName)
 	cfg.gameCertFile = ctx.String(gameCertFileName)
 	cfg.gameKeyFile = ctx.String(gameKeyFileName)
-	cfg.gameDatabaseFile = ctx.String(gameDatabaseFileName)
+	cfg.databaseFile = ctx.String(databaseFileName)
 
 	if cfg.webRootURL == webRootURLDefault && cfg.webPort != 80 {
 		cfg.webRootURL += fmt.Sprintf(":%d", cfg.webPort)
@@ -75,19 +78,41 @@ func runWeb(ctx *cli.Context) {
 	var cfg webConfig
 	cfg.parse(ctx)
 
-	go startGameServer(&cfg)
-	startWebServer(&cfg)
+	database := startDatabase(&cfg)
+	go startGameServer(&cfg, database)
+	go startWebServer(&cfg, database)
+
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, os.Kill)
+	for range signalChannel {
+		// TODO: gracefully shutdown game- and webserver
+
+		err := database.Close()
+		if err != nil {
+			fmt.Println("failed to close database: ", err)
+		}
+
+		return
+	}
 }
 
-func startGameServer(cfg *webConfig) {
-	srvConfig := network.ServerConfig{
-		Port:         cfg.gamePort,
-		CertFile:     cfg.gameCertFile,
-		KeyFile:      cfg.gameKeyFile,
-		DatabaseFile: cfg.gameDatabaseFile,
+func startDatabase(cfg *webConfig) db.Database {
+	database, err := db.NewDatabase(cfg.databaseFile)
+	if err != nil {
+		panic(err)
 	}
 
-	srv, err := network.NewServer(srvConfig)
+	return database
+}
+
+func startGameServer(cfg *webConfig, database db.Database) {
+	srvConfig := network.ServerConfig{
+		Port:     cfg.gamePort,
+		CertFile: cfg.gameCertFile,
+		KeyFile:  cfg.gameKeyFile,
+	}
+
+	srv, err := network.NewServer(srvConfig, database)
 	if err != nil {
 		panic(err)
 	}
@@ -98,7 +123,7 @@ func startGameServer(cfg *webConfig) {
 	}
 }
 
-func startWebServer(cfg *webConfig) {
+func startWebServer(cfg *webConfig, database db.Database) {
 	srvConfig := website.WebsiteConfig{
 		RootURL: cfg.webRootURL,
 		Port:    cfg.webPort,
@@ -107,7 +132,8 @@ func startWebServer(cfg *webConfig) {
 		},
 	}
 
-	srv := website.NewWebsite(srvConfig)
+	srv := website.NewWebsite(srvConfig, database)
+
 	err := srv.ListenAndServe()
 	if err != nil {
 		panic(err)
