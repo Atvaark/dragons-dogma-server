@@ -69,7 +69,8 @@ func initDragonBucket(tx *bolt.Tx) error {
 			return err
 		}
 
-		d := game.NewOnlineUrDragon()
+		d := &game.OnlineUrDragon{}
+		d = d.NextGeneration()
 		err = putOnlineUrDragonInternal(b, d)
 		if err != nil {
 			return err

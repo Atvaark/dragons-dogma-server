@@ -99,7 +99,7 @@ func (c *Client) GetOnlineUrDragon() (*game.OnlineUrDragon, error) {
 	var err error
 	var response Packet
 
-	err = c.send(&TusCommonAreaAcquisitionRequest{PropertyIndices: AllPropertyIndices()})
+	err = c.send(&TusCommonAreaAcquisitionRequest{PropertyIndices: game.AllDragonPropertyIndices()})
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (c *Client) GetOnlineUrDragon() (*game.OnlineUrDragon, error) {
 	}
 
 	dragon := &game.OnlineUrDragon{}
-	SetDragonProperties(dragon, tusCommonAreaAcquisitionResponse.Properties)
+	dragon.SetProperties(networkToDragonProperties(tusCommonAreaAcquisitionResponse.Properties))
 	return dragon, nil
 }
 

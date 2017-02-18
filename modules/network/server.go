@@ -204,18 +204,54 @@ func (s *Server) handleClient(client *ClientConn) error {
 				return err
 			}
 
-			dragonProps, err := GetDragonPropertiesFilter(dragon, r.PropertyIndices)
+			dragonProps, err := dragon.PropertiesFiltered(r.PropertyIndices)
 			if err != nil {
 				return err
 			}
-			err = client.Send(&TusCommonAreaAcquisitionResponse{PropertyPacket{Properties: dragonProps}})
+			err = client.Send(&TusCommonAreaAcquisitionResponse{PropertyPacket{Properties: dragonToNetworkProperties(dragonProps)}})
 			if err != nil {
 				return err
 			}
 		case *TusCommonAreaAddRequest:
-			// TODO: Implement incrementing the fight and kill counter.
+			dragon, err := s.database.GetOnlineUrDragon()
+			if err != nil {
+				return err
+			}
+
+			dragonProps, err := dragon.AddProperties(networkToDragonProperties(r.Properties))
+			if err != nil {
+				return err
+			}
+
+			err = s.database.PutOnlineUrDragon(dragon)
+			if err != nil {
+				return err
+			}
+
+			err = client.Send(&TusCommonAreaAddResponse{PropertyPacket{Properties: dragonToNetworkProperties(dragonProps)}})
+			if err != nil {
+				return err
+			}
 		case *TusCommonAreaSettingsRequest:
-			// TODO: Implement overwriting the prop values.
+			dragon, err := s.database.GetOnlineUrDragon()
+			if err != nil {
+				return err
+			}
+
+			err = dragon.SetProperties(networkToDragonProperties(r.Properties))
+			if err != nil {
+				return err
+			}
+
+			err = s.database.PutOnlineUrDragon(dragon)
+			if err != nil {
+				return err
+			}
+
+			err = client.Send(&TusCommonAreaSettingsResponse{PropertyPacket{Properties: r.Properties}})
+			if err != nil {
+				return err
+			}
 		case *DisconnectionRequest:
 			err = client.Send(&DisconnectionResponse{BooleanPacket{Value: true}})
 			if err != nil {
