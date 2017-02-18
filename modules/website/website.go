@@ -1,6 +1,7 @@
 package website
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -9,8 +10,7 @@ import (
 )
 
 type Website struct {
-	config   WebsiteConfig
-	database auth.Database
+	server *http.Server
 }
 
 type AuthConfig struct {
@@ -29,23 +29,37 @@ var (
 )
 
 func NewWebsite(cfg WebsiteConfig, database auth.Database) *Website {
-	return &Website{
-		config:   cfg,
-		database: database,
-	}
-}
-
-func (w *Website) ListenAndServe() error {
-	sessionHandler := auth.NewSessionHandler(w.database)
-	authHandler := auth.NewAuthHandler(w.config.RootURL, "/login/", w.config.AuthConfig.SteamKey)
-	homeHandler := &homeHandler{w.config.RootURL, "/", sessionHandler}
-	loginHandler := &loginHandler{w.config.RootURL, "/login/", sessionHandler, authHandler}
+	sessionHandler := auth.NewSessionHandler(database)
+	authHandler := auth.NewAuthHandler(cfg.RootURL, "/login/", cfg.AuthConfig.SteamKey)
+	homeHandler := &homeHandler{cfg.RootURL, "/", sessionHandler}
+	loginHandler := &loginHandler{cfg.RootURL, "/login/", sessionHandler, authHandler}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(homeHandler.path, homeHandler.handle)
 	mux.HandleFunc(loginHandler.path, loginHandler.handle)
 
-	err := http.ListenAndServe(fmt.Sprintf(":%d", w.config.Port), mux)
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Handler: mux,
+	}
+
+	return &Website{
+		server: srv,
+	}
+}
+
+func (w *Website) ListenAndServe() error {
+	err := w.server.ListenAndServe()
+	if err != nil && err.Error() != "http: Server closed" {
+		return err
+	}
+
+	return nil
+}
+
+func (w *Website) Close() error {
+	var ctx context.Context
+	err := w.server.Shutdown(ctx)
 	if err != nil {
 		return err
 	}

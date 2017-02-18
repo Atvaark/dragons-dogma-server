@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"sync"
 	"sync/atomic"
 
 	"github.com/atvaark/dragons-dogma-server/modules/game"
@@ -12,6 +13,7 @@ import (
 type Server struct {
 	config   ServerConfig
 	database game.Database
+	listener *serverListener
 }
 
 type ServerConfig struct {
@@ -26,7 +28,6 @@ func NewServer(cfg ServerConfig, database game.Database) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	cfg.tlsConfig = &tls.Config{
 		Certificates: []tls.Certificate{
 			cert,
@@ -42,25 +43,50 @@ func NewServer(cfg ServerConfig, database game.Database) (*Server, error) {
 
 func (s *Server) ListenAndServe() error {
 	port := fmt.Sprintf(":%d", s.config.Port)
-	listener, err := tls.Listen("tcp", port, s.config.tlsConfig)
+	tlsListener, err := tls.Listen("tcp", port, s.config.tlsConfig)
 	if err != nil {
 		return err
 	}
 
-	var nextConnID int64
+	listener := serverListener{
+		listener:    tlsListener,
+		connections: make(map[int64]net.Conn, 0),
+		close:       make(chan bool, 1),
+	}
+	s.listener = &listener
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			printf("%v", err)
-			continue
+			select {
+			case <-listener.close:
+				s.listener.CloseConns()
+				return nil
+			default:
+				printf("%v", err)
+				continue
+			}
 		}
 
-		connID := atomic.AddInt64(&nextConnID, 1)
-		go s.handleConnection(conn, connID)
+		go s.handleConnection(conn)
 	}
 }
 
-func (s *Server) handleConnection(conn net.Conn, connID int64) {
+func (s *Server) Close() error {
+	l := s.listener
+	if l != nil {
+		err := l.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) handleConnection(conn net.Conn) {
+	connID := s.listener.AddConn(conn)
+	defer s.listener.DelConn(connID)
 	defer conn.Close()
 
 	printf("[%d] connecting\n", connID)
@@ -215,4 +241,59 @@ func disconnect(client *ClientConn) error {
 	}
 
 	return nil
+}
+
+type serverListener struct {
+	listener         net.Listener
+	connectionsMutex sync.Mutex
+	connections      map[int64]net.Conn
+	connId           int64
+	close            chan bool
+}
+
+func (l *serverListener) Accept() (net.Conn, error) {
+	return l.listener.Accept()
+}
+
+func (l *serverListener) Close() error {
+	l.close <- true
+	err := l.listener.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (l *serverListener) Addr() net.Addr {
+	return l.listener.Addr()
+}
+
+func (l *serverListener) AddConn(conn net.Conn) (connID int64) {
+	l.connectionsMutex.Lock()
+	defer l.connectionsMutex.Unlock()
+	connID = atomic.AddInt64(&l.connId, 1)
+	l.connections[connID] = conn
+	return connID
+}
+
+func (l *serverListener) DelConn(connID int64) {
+	l.connectionsMutex.Lock()
+	defer l.connectionsMutex.Unlock()
+	delete(l.connections, connID)
+}
+
+func (l *serverListener) CloseConns() {
+	l.connectionsMutex.Lock()
+	defer l.connectionsMutex.Unlock()
+
+	for connID, conn := range l.connections {
+		// TODO: Send a DisconnectionNotification Packet to the client before closing the connection.
+		err := conn.Close()
+		if err != nil {
+			printf("[%d] failed to forcefully close connection: %v", connID, err)
+		}
+
+		delete(l.connections, connID)
+	}
 }

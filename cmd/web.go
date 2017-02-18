@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -78,19 +79,33 @@ func runWeb(ctx *cli.Context) {
 	var cfg webConfig
 	cfg.parse(ctx)
 
+	log.Println("Starting")
 	database := startDatabase(&cfg)
-	go startGameServer(&cfg, database)
-	go startWebServer(&cfg, database)
+	gameServer := startGameServer(&cfg, database)
+	gameWebsite := startGameWebsite(&cfg, database)
+	log.Println("Started")
 
 	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, os.Interrupt, os.Kill)
+	signal.Notify(signalChannel, os.Interrupt)
 	for range signalChannel {
-		// TODO: gracefully shutdown game- and webserver
-
-		err := database.Close()
+		log.Println("Stopping")
+		var err error
+		err = gameWebsite.Close()
 		if err != nil {
-			fmt.Println("failed to close database: ", err)
+			log.Println("failed to close website: ", err)
 		}
+
+		err = gameServer.Close()
+		if err != nil {
+			log.Println("failed to close server: ", err)
+		}
+
+		err = database.Close()
+		if err != nil {
+			log.Println("failed to close database: ", err)
+		}
+
+		log.Println("Stopped")
 
 		return
 	}
@@ -105,7 +120,7 @@ func startDatabase(cfg *webConfig) db.Database {
 	return database
 }
 
-func startGameServer(cfg *webConfig, database db.Database) {
+func startGameServer(cfg *webConfig, database db.Database) *network.Server {
 	srvConfig := network.ServerConfig{
 		Port:     cfg.gamePort,
 		CertFile: cfg.gameCertFile,
@@ -117,13 +132,17 @@ func startGameServer(cfg *webConfig, database db.Database) {
 		panic(err)
 	}
 
-	err = srv.ListenAndServe()
-	if err != nil {
-		panic(err)
-	}
+	go func() {
+		err = srv.ListenAndServe()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	return srv
 }
 
-func startWebServer(cfg *webConfig, database db.Database) {
+func startGameWebsite(cfg *webConfig, database db.Database) *website.Website {
 	srvConfig := website.WebsiteConfig{
 		RootURL: cfg.webRootURL,
 		Port:    cfg.webPort,
@@ -132,10 +151,14 @@ func startWebServer(cfg *webConfig, database db.Database) {
 		},
 	}
 
-	srv := website.NewWebsite(srvConfig, database)
+	gameWebsite := website.NewWebsite(srvConfig, database)
 
-	err := srv.ListenAndServe()
-	if err != nil {
-		panic(err)
-	}
+	go func() {
+		err := gameWebsite.ListenAndServe()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	return gameWebsite
 }
