@@ -192,6 +192,7 @@ func (s *Server) handleClient(client *ClientConn) error {
 	// TODO: Return an error packet to the client in case of errors
 
 	for {
+		// TODO: Send an onlineCheckRequest if no request was sent in X time
 		request, err := client.Recv()
 		if err != nil {
 			return err
@@ -258,6 +259,8 @@ func (s *Server) handleClient(client *ClientConn) error {
 				return err
 			}
 			return nil
+		case *TusUserAreaReadRequestHeader:
+		case *TusUserAreaWriteRequestHeader:
 		default:
 			printf("unhandled request: %v", request)
 

@@ -11,6 +11,8 @@ const UrDragonHeartHealth = 10000000
 const UserIdCount = 3
 const ArmorMax = 100000
 
+//const GraceTime = 40 * time.Minute
+
 type OnlineUrDragon struct {
 	Generation  uint32
 	SpawnTime   *time.Time
@@ -185,6 +187,22 @@ func (d *OnlineUrDragon) SetProperties(props []DragonProperty) error {
 			d.SpawnTime = nillableUnixTime(prop.Value2)
 		case prop.Index > MaxDragonProperties:
 			return fmt.Errorf("invalid property index %d", prop.Index)
+		}
+	}
+
+	// TODO: Test if the client sends the kill date or the kill date is set once all hearts have been killed
+	if d.KillTime == nil {
+		var isAlive bool
+		for _, h := range d.Hearts {
+			if h.Health > 0 {
+				isAlive = true
+				break
+			}
+		}
+
+		if !isAlive {
+			killTime := time.Now().UTC()
+			d.KillTime = &killTime
 		}
 	}
 
