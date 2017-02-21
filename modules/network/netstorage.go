@@ -30,7 +30,15 @@ type UserAreaSlot struct {
 
 type UserAreaItem uint32
 
+const userAreaType = uint32(0x12122700)
+
+var userAreaKey = []byte("nokupak amugod uznogarod")
+
 func ReadUserArea(data []byte) (*UserArea, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
 	data, err := decryptUserArea(data)
 	if err != nil {
 		return nil, err
@@ -49,6 +57,53 @@ func ReadUserArea(data []byte) (*UserArea, error) {
 	return area, nil
 }
 
+func WriteUserArea(area *UserArea) ([]byte, error) {
+	if area == nil {
+		return make([]byte, 0), nil
+	}
+
+	data, err := serializeUserArea(area)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err = compressUserArea(data)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err = encryptUserArea(data)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err = padUserArea(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func padUserArea(data []byte) ([]byte, error) {
+	const targetSize = 2048
+	if len(data) > targetSize {
+		return nil, errors.New("user area exceeds max size")
+	}
+
+	if len(data) == targetSize {
+		return data, nil
+	}
+
+	padded := make([]byte, targetSize)
+	copy(padded, data)
+	for i := len(data); i < len(padded); i++ {
+		padded[i] = 0xDD
+	}
+
+	return padded, nil
+}
+
 func swapUint32Endianess(b []byte) {
 	for i := 0; i < len(b); i += 4 {
 		b[i], b[i+1], b[i+2], b[i+3] = b[i+3], b[i+2], b[i+1], b[i]
@@ -64,14 +119,49 @@ func requiredPadding(dataLength int, blockSize int) int {
 	return blockSize - mod
 }
 
-var userAreaKey = []byte("nokupak amugod uznogarod")
+type encryptedHeader struct {
+	Type   uint32 // 0x12122700, 0x11090800
+	Length int
+}
 
-func decryptUserArea(data []byte) ([]byte, error) {
-	type encryptedHeader struct {
-		Type   uint32 // 0x12122700, 0x11090800
-		Length int
+func encryptUserArea(data []byte) ([]byte, error) {
+	var h encryptedHeader
+	h.Type = userAreaType
+	h.Length = len(data)
+
+	dataEncrypted, err := encrypt(userAreaKey, data)
+	if err != nil {
+		return nil, err
 	}
 
+	encrypted := make([]byte, 8+len(dataEncrypted))
+	binary.LittleEndian.PutUint32(encrypted[0:4], h.Type)
+	binary.LittleEndian.PutUint32(encrypted[4:8], uint32(h.Length))
+	copy(encrypted[8:], dataEncrypted)
+
+	return encrypted, nil
+}
+
+func encrypt(key, data []byte) ([]byte, error) {
+	ci, err := blowfish.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	blockSize := ci.BlockSize()
+	pad := requiredPadding(len(data), blockSize)
+	dataEncrypted := make([]byte, len(data)+pad)
+	copy(dataEncrypted, data)
+
+	for i := 0; i < len(dataEncrypted); i += blockSize {
+		swapUint32Endianess(dataEncrypted[i : i+8])
+		ci.Encrypt(dataEncrypted[i:i+blockSize], dataEncrypted[i:i+blockSize])
+		swapUint32Endianess(dataEncrypted[i : i+8])
+	}
+
+	return dataEncrypted[:], nil
+}
+
+func decryptUserArea(data []byte) ([]byte, error) {
 	if len(data) == 0 {
 		return make([]byte, 0), nil
 	}
@@ -88,23 +178,31 @@ func decryptUserArea(data []byte) ([]byte, error) {
 		return nil, errors.New("insufficient data to decrypt")
 	}
 
-	ci, err := blowfish.NewCipher(userAreaKey)
+	dataDecrypted, err := decrypt(userAreaKey, data[8:], h.Length)
 	if err != nil {
 		return nil, err
 	}
 
-	blockSize := ci.BlockSize()
-	pad := requiredPadding(h.Length, blockSize)
-	buf := make([]byte, h.Length+pad)
-	copy(buf, data[8:8+h.Length])
+	return dataDecrypted[:], nil
+}
 
-	for i := 0; i < len(buf); i += blockSize {
-		swapUint32Endianess(buf[i : i+8])
-		ci.Decrypt(buf[i:i+blockSize], buf[i:i+blockSize])
-		swapUint32Endianess(buf[i : i+8])
+func decrypt(key, data []byte, n int) ([]byte, error) {
+	ci, err := blowfish.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	blockSize := ci.BlockSize()
+	pad := requiredPadding(len(data), blockSize)
+	dataDecrypted := make([]byte, len(data)+pad)
+	copy(dataDecrypted, data)
+
+	for i := 0; i < len(dataDecrypted); i += blockSize {
+		swapUint32Endianess(dataDecrypted[i : i+8])
+		ci.Decrypt(dataDecrypted[i:i+blockSize], dataDecrypted[i:i+blockSize])
+		swapUint32Endianess(dataDecrypted[i : i+8])
 	}
 
-	return buf[:h.Length], nil
+	return dataDecrypted[:n], nil
 }
 
 type compressedUserAreaHeader struct {
@@ -112,6 +210,44 @@ type compressedUserAreaHeader struct {
 	Length             int
 	LengthDecompressed int
 	SHA1Hash           [20]byte
+}
+
+func compressUserArea(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := zlib.NewWriter(&buf)
+	r := bytes.NewReader(data)
+	_, err := io.Copy(zw, r)
+	if err != nil {
+		return nil, err
+	}
+	err = zw.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	dataCompressed := buf.Bytes()
+
+	var h compressedUserAreaHeader
+	h.Type = userAreaType
+	h.Length = len(dataCompressed)
+	h.LengthDecompressed = len(data)
+
+	digest := sha1.New()
+	_, err = digest.Write(dataCompressed)
+	if err != nil {
+		return nil, err
+	}
+	copy(h.SHA1Hash[:], digest.Sum(nil))
+
+	compressed := make([]byte, 32+len(dataCompressed))
+	binary.LittleEndian.PutUint32(compressed[0:4], h.Type)
+	binary.LittleEndian.PutUint32(compressed[4:8], uint32(h.Length))
+	binary.LittleEndian.PutUint32(compressed[8:12], uint32(h.LengthDecompressed))
+	copy(compressed[12:32], h.SHA1Hash[:])
+	swapUint32Endianess(compressed[12:32])
+	copy(compressed[32:], dataCompressed)
+
+	return compressed, nil
 }
 
 func decompressUserArea(data []byte) ([]byte, error) {
@@ -130,10 +266,10 @@ func decompressUserArea(data []byte) ([]byte, error) {
 		return nil, errors.New("insufficient data to decompress")
 	}
 
-	compressed := data[32:]
+	dataCompressed := data[32:]
 
 	digest := sha1.New()
-	_, err := digest.Write(compressed)
+	_, err := digest.Write(dataCompressed)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +279,7 @@ func decompressUserArea(data []byte) ([]byte, error) {
 		return nil, errors.New("hash mismatch")
 	}
 
-	r := bytes.NewReader(compressed)
+	r := bytes.NewReader(dataCompressed)
 	zr, err := zlib.NewReader(r)
 	if err != nil {
 		return nil, err
@@ -168,11 +304,39 @@ func decompressUserArea(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+const userAreaItemLen = 4
+const userAreaSlotsLen = SlotsMax * (13 + ItemsMax*userAreaItemLen)
+const userAreaHeaderLen = 8
+const userAreaLen = userAreaHeaderLen + userAreaSlotsLen
+
+func serializeUserArea(area *UserArea) ([]byte, error) {
+	data := make([]byte, userAreaLen)
+
+	binary.BigEndian.PutUint32(data[0:4], area.Unknown)
+	binary.BigEndian.PutUint32(data[4:8], area.UnknownCount)
+
+	var offset int = 8
+	for i := 0; i < len(area.Slots); i++ {
+		slot := &area.Slots[i]
+
+		data[offset] = slot.Unknown
+		offset += 1
+
+		for j := 0; j < len(slot.Items); j++ {
+			binary.BigEndian.PutUint32(data[offset:offset+4], uint32(slot.Items[j]))
+			offset += 4
+		}
+
+		binary.BigEndian.PutUint32(data[offset:offset+4], slot.ItemsCount)
+		binary.BigEndian.PutUint64(data[offset+4:offset+12], slot.User)
+		offset += 12
+	}
+
+	return data, nil
+}
+
 func parseUserArea(data []byte) (*UserArea, error) {
-	const itemLen = 4
-	const slotsLen = SlotsMax * (13 + ItemsMax*itemLen)
-	const headerLen = 8
-	if len(data) < headerLen+slotsLen {
+	if len(data) < userAreaLen {
 		return nil, errors.New("insufficient data to decompress")
 	}
 
