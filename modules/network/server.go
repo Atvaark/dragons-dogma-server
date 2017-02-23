@@ -2,6 +2,7 @@ package network
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -260,6 +261,53 @@ func (s *Server) handleClient(client *ClientConn) error {
 			}
 			return nil
 		case *TusUserAreaReadRequestHeader:
+			// TODO: Load the user area of r.User from database
+			area := &UserArea{}
+			areaData, err := WriteUserArea(area)
+			if err != nil {
+				return err
+			}
+
+			err = client.Send(&TusUserAreaReadResponseHeader{DataLength: uint32(len(areaData))})
+			if err != nil {
+				return err
+			}
+
+			for {
+				response, err := client.Recv()
+				if err != nil {
+					return err
+				}
+
+				_, ok := response.(*TusUserAreaReadRequestFooter)
+				if ok {
+					err = client.Send(&TusUserAreaReadResponseFooter{})
+					if err != nil {
+						return err
+					}
+
+					break
+				}
+
+				tusUserAreaReadRequestData, ok := response.(*TusUserAreaReadRequestData)
+				if !ok {
+					return NewPacketTypeError(tusUserAreaReadRequestData, response)
+				}
+
+				chunkOffset := int(tusUserAreaReadRequestData.ChunkOffset)
+				chunkLen := int(tusUserAreaReadRequestData.ChunkLength)
+
+				const chunkLenMax = 2048
+				if chunkLen > chunkLenMax || chunkOffset+chunkLen > len(areaData) {
+					return errors.New("invalid DataChunkReferencePacket")
+				}
+
+				chunkData := areaData[chunkOffset : chunkOffset+chunkLen]
+				err = client.Send(&TusUserAreaReadResponseData{DataChunkPacket{ChunkOffset: uint32(chunkOffset), ChunkData: chunkData}})
+				if err != nil {
+					return err
+				}
+			}
 		case *TusUserAreaWriteRequestHeader:
 		default:
 			printf("unhandled request: %v", request)
