@@ -41,7 +41,6 @@ const (
 
 const (
 	maxPacketLength = int(^uint16(0))
-	propertySize    = 9
 )
 
 type Packet interface {
@@ -63,6 +62,8 @@ type PacketType struct {
 }
 
 // packet content
+
+const propertySize = 9
 
 type Property struct {
 	Index  uint8
@@ -172,6 +173,8 @@ func (p *DataChunkPacket) SetPayload(payload []byte) error {
 
 	return nil
 }
+
+const maxChunkLength = 2048
 
 type DataChunkReferencePacket struct {
 	PacketHeader
@@ -342,6 +345,8 @@ type TusCommonAreaSettingsRequest struct {
 type TusCommonAreaAddRequest struct {
 	PropertyPacket
 }
+
+const maxDataLength = 2048
 
 type TusUserAreaWriteRequestHeader struct {
 	PacketHeader

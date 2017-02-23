@@ -193,23 +193,26 @@ func (s *Server) handleClient(client *ClientConn) error {
 	// TODO: Return an error packet to the client in case of errors
 
 	for {
-		// TODO: Send an onlineCheckRequest if no request was sent in X time
+		// TODO: Send an onlineCheckRequest if no request was sent after 60s
+		//       Disconnect the client if no onlineCheckResponse gets received after 30s
+
 		request, err := client.Recv()
 		if err != nil {
 			return err
 		}
 
-		switch r := request.(type) {
+		switch request := request.(type) {
 		case *TusCommonAreaAcquisitionRequest:
 			dragon, err := s.database.GetOnlineUrDragon()
 			if err != nil {
 				return err
 			}
 
-			dragonProps, err := dragon.PropertiesFiltered(r.PropertyIndices)
+			dragonProps, err := dragon.PropertiesFiltered(request.PropertyIndices)
 			if err != nil {
 				return err
 			}
+
 			err = client.Send(&TusCommonAreaAcquisitionResponse{PropertyPacket{Properties: dragonToNetworkProperties(dragonProps)}})
 			if err != nil {
 				return err
@@ -220,7 +223,7 @@ func (s *Server) handleClient(client *ClientConn) error {
 				return err
 			}
 
-			dragonProps, err := dragon.AddProperties(networkToDragonProperties(r.Properties))
+			dragonProps, err := dragon.AddProperties(networkToDragonProperties(request.Properties))
 			if err != nil {
 				return err
 			}
@@ -240,7 +243,7 @@ func (s *Server) handleClient(client *ClientConn) error {
 				return err
 			}
 
-			err = dragon.SetProperties(networkToDragonProperties(r.Properties))
+			err = dragon.SetProperties(networkToDragonProperties(request.Properties))
 			if err != nil {
 				return err
 			}
@@ -250,7 +253,7 @@ func (s *Server) handleClient(client *ClientConn) error {
 				return err
 			}
 
-			err = client.Send(&TusCommonAreaSettingsResponse{PropertyPacket{Properties: r.Properties}})
+			err = client.Send(&TusCommonAreaSettingsResponse{PropertyPacket{Properties: request.Properties}})
 			if err != nil {
 				return err
 			}
@@ -259,6 +262,7 @@ func (s *Server) handleClient(client *ClientConn) error {
 			if err != nil {
 				return err
 			}
+
 			return nil
 		case *TusUserAreaReadRequestHeader:
 			// TODO: Load the user area of r.User from database
@@ -273,42 +277,93 @@ func (s *Server) handleClient(client *ClientConn) error {
 				return err
 			}
 
+		ReadLoop:
 			for {
 				response, err := client.Recv()
 				if err != nil {
 					return err
 				}
 
-				_, ok := response.(*TusUserAreaReadRequestFooter)
-				if ok {
+				switch response := response.(type) {
+				case *TusUserAreaReadRequestFooter:
 					err = client.Send(&TusUserAreaReadResponseFooter{})
 					if err != nil {
 						return err
 					}
 
-					break
-				}
+					break ReadLoop
+				case *TusUserAreaReadRequestData:
+					chunkOffset := int(response.ChunkOffset)
+					chunkLength := int(response.ChunkLength)
 
-				tusUserAreaReadRequestData, ok := response.(*TusUserAreaReadRequestData)
-				if !ok {
-					return NewPacketTypeError(tusUserAreaReadRequestData, response)
-				}
+					if chunkLength > maxChunkLength || chunkOffset+chunkLength > len(areaData) {
+						return errors.New("read user area failed: invalid size")
+					}
 
-				chunkOffset := int(tusUserAreaReadRequestData.ChunkOffset)
-				chunkLen := int(tusUserAreaReadRequestData.ChunkLength)
-
-				const chunkLenMax = 2048
-				if chunkLen > chunkLenMax || chunkOffset+chunkLen > len(areaData) {
-					return errors.New("invalid DataChunkReferencePacket")
-				}
-
-				chunkData := areaData[chunkOffset : chunkOffset+chunkLen]
-				err = client.Send(&TusUserAreaReadResponseData{DataChunkPacket{ChunkOffset: uint32(chunkOffset), ChunkData: chunkData}})
-				if err != nil {
-					return err
+					chunkData := areaData[chunkOffset : chunkOffset+chunkLength]
+					err = client.Send(&TusUserAreaReadResponseData{DataChunkPacket{ChunkOffset: uint32(chunkOffset), ChunkData: chunkData}})
+					if err != nil {
+						return err
+					}
+				default:
+					return fmt.Errorf("read user area failed: unexpected response %T", response)
 				}
 			}
 		case *TusUserAreaWriteRequestHeader:
+			if request.DataLength > maxDataLength {
+				return errors.New("write user area failed: invalid size")
+			}
+
+			areaData := make([]byte, int(request.DataLength))
+
+			const chunkLength = uint16(1024)
+			err = client.Send(&TusUserAreaWriteResponseHeader{ChunkLength: chunkLength})
+			if err != nil {
+				return err
+			}
+
+		WriteLoop:
+			for {
+				response, err := client.Recv()
+				if err != nil {
+					return err
+				}
+
+				switch response := response.(type) {
+				case *TusUserAreaWriteRequestFooter:
+					area, err := ReadUserArea(areaData)
+					if err != nil {
+						return err
+					}
+
+					// TODO: Save the user area of r.User into database
+					_ = area
+
+					err = client.Send(&TusUserAreaWriteResponseFooter{})
+					if err != nil {
+						return err
+					}
+
+					break WriteLoop
+				case *TusUserAreaWriteRequestData:
+					chunkOffset := int(response.ChunkOffset)
+					chunkData := response.ChunkData
+					chunkLength := len(chunkData)
+
+					if chunkLength > maxChunkLength || chunkOffset+chunkLength > len(areaData) {
+						return errors.New("write user area failed: invalid size")
+					}
+
+					copy(areaData[chunkOffset:chunkOffset+chunkLength], chunkData)
+
+					err = client.Send(&TusUserAreaWriteResponseData{DataChunkReferencePacket{ChunkOffset: uint32(chunkOffset), ChunkLength: uint16(chunkLength)}})
+					if err != nil {
+						return err
+					}
+				default:
+					return fmt.Errorf("write user area failed: unexpected response %T", response)
+				}
+			}
 		default:
 			printf("unhandled request: %v", request)
 
