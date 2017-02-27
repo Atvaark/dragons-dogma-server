@@ -36,11 +36,11 @@ func TestRoundtrip(t *testing.T) {
 func TestWriteUserArea(t *testing.T) {
 	var area1 UserArea
 	area1.Unknown = 1
-	area1.UnknownCount = 2
+	area1.Revision = 2
 	slot1 := &area1.Slots[1]
-	slot1.Unknown = 0
+	slot1.IsFree = 0
 	for i := 0; i < len(slot1.Items); i++ {
-		slot1.Items[i] = 0xFFFFFFFF
+		slot1.Items[i] = NoUserAreaItem
 	}
 	slot1.Items[0] = 10
 	slot1.ItemsCount = 1
@@ -76,28 +76,28 @@ func TestReadUserArea(t *testing.T) {
 
 	const expectedUnknown = 0
 	if area.Unknown != expectedUnknown {
-		t.Errorf("got Unknown %d expected %d", area.Unknown, expectedUnknown)
+		t.Errorf("got IsFree %d expected %d", area.Unknown, expectedUnknown)
 	}
 
 	const expectedUnknownCount = 7
-	if area.UnknownCount != expectedUnknownCount {
-		t.Errorf("got UnknownCount %d expected %d", area.UnknownCount, expectedUnknownCount)
+	if area.Revision != expectedUnknownCount {
+		t.Errorf("got Revision %d expected %d", area.Revision, expectedUnknownCount)
 	}
 
 	slot0 := area.Slots[0]
 	expectedSlot0 := UserAreaSlot{
-		Unknown: 1,
+		IsFree: 1,
 		Items: [10]UserAreaItem{
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
 		},
 		ItemsCount: 0,
 		User:       0,
@@ -107,18 +107,18 @@ func TestReadUserArea(t *testing.T) {
 
 	slot5 := area.Slots[5]
 	expectedSlot5 := UserAreaSlot{
-		Unknown: 0,
+		IsFree: 0,
 		Items: [10]UserAreaItem{
 			UserAreaItem(26),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
-			UserAreaItem(0xFFFFFFFF),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
+			UserAreaItem(NoUserAreaItem),
 		},
 		ItemsCount: 1,
 		User:       76561198028565520,
@@ -131,11 +131,11 @@ func TestReadUserArea(t *testing.T) {
 
 func compareArea(t *testing.T, actual, expected *UserArea) {
 	if actual.Unknown != expected.Unknown {
-		t.Errorf("got Unknown %v expected %v", actual.Unknown, expected.Unknown)
+		t.Errorf("got IsFree %v expected %v", actual.Unknown, expected.Unknown)
 	}
 
-	if actual.UnknownCount != expected.UnknownCount {
-		t.Errorf("got UnknownCount %v expected %v", actual.UnknownCount, expected.UnknownCount)
+	if actual.Revision != expected.Revision {
+		t.Errorf("got Revision %v expected %v", actual.Revision, expected.Revision)
 	}
 
 	for i := 0; i < len(actual.Slots); i++ {
@@ -144,8 +144,8 @@ func compareArea(t *testing.T, actual, expected *UserArea) {
 }
 
 func compareSlot(t *testing.T, slot, testSlot *UserAreaSlot, i int) {
-	if slot.Unknown != testSlot.Unknown {
-		t.Errorf("got Slot[%d].Unknown %v expected %v", i, slot.Unknown, testSlot.Unknown)
+	if slot.IsFree != testSlot.IsFree {
+		t.Errorf("got Slot[%d].IsFree %v expected %v", i, slot.IsFree, testSlot.IsFree)
 	}
 
 	if slot.ItemsCount != testSlot.ItemsCount {

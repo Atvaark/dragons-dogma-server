@@ -11,7 +11,8 @@ const UrDragonHeartHealth = 10000000
 const UserIdCount = 3
 const ArmorMax = 100000
 
-//const GraceTime = 40 * time.Minute
+const GraceKillsMin = 40
+const GraceTime = 40 * time.Minute
 
 type OnlineUrDragon struct {
 	Generation  uint32
@@ -56,7 +57,7 @@ func (d *OnlineUrDragon) NextGeneration() *OnlineUrDragon {
 	return &next
 }
 
-type Database interface {
+type DragonDatabase interface {
 	GetOnlineUrDragon() (*OnlineUrDragon, error)
 	PutOnlineUrDragon(*OnlineUrDragon) error
 }
@@ -190,6 +191,10 @@ func (d *OnlineUrDragon) SetProperties(props []DragonProperty) error {
 		}
 	}
 
+	return nil
+}
+
+func (d *OnlineUrDragon) Tick() *OnlineUrDragon {
 	// TODO: Test if the client sends the kill date or the kill date is set once all hearts have been killed
 	if d.KillTime == nil {
 		var isAlive bool
@@ -204,9 +209,13 @@ func (d *OnlineUrDragon) SetProperties(props []DragonProperty) error {
 			killTime := time.Now().UTC()
 			d.KillTime = &killTime
 		}
+	} else {
+		if d.KillCount >= GraceKillsMin && time.Now().UTC().After(d.KillTime.Add(GraceTime)) {
+			return d.NextGeneration()
+		}
 	}
 
-	return nil
+	return d
 }
 
 func (d *OnlineUrDragon) AddProperties(props []DragonProperty) ([]DragonProperty, error) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -265,8 +266,17 @@ func (s *Server) handleClient(client *ClientConn) error {
 
 			return nil
 		case *TusUserAreaReadRequestHeader:
-			// TODO: Load the user area of r.User from database
-			area := &UserArea{}
+			userID, err := strconv.ParseUint(request.User, 16, 64)
+			if err != nil {
+				return err
+			}
+
+			rewards, err := s.database.GetPawnRewards(userID)
+			if err != nil {
+				return err
+			}
+
+			area := pawnRewardsToUserArea(rewards)
 			areaData, err := WriteUserArea(area)
 			if err != nil {
 				return err
@@ -310,6 +320,11 @@ func (s *Server) handleClient(client *ClientConn) error {
 				}
 			}
 		case *TusUserAreaWriteRequestHeader:
+			userID, err := strconv.ParseUint(request.User, 16, 64)
+			if err != nil {
+				return err
+			}
+
 			if request.DataLength > maxDataLength {
 				return errors.New("write user area failed: invalid size")
 			}
@@ -336,8 +351,11 @@ func (s *Server) handleClient(client *ClientConn) error {
 						return err
 					}
 
-					// TODO: Save the user area of r.User into database
-					_ = area
+					rewards := userAreaToPawnRewards(userID, area)
+					err = s.database.PutPawnRewards(rewards)
+					if err != nil {
+						return err
+					}
 
 					err = client.Send(&TusUserAreaWriteResponseFooter{})
 					if err != nil {

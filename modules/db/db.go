@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,10 +39,24 @@ func NewDatabase(path string) (Database, error) {
 	return database, nil
 }
 
+func (db *boltDB) Close() error {
+	err := db.innerDB.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close the database: %v", err)
+	}
+
+	return nil
+}
+
 func (db *boltDB) init() error {
 	err := db.innerDB.Update(func(tx *bolt.Tx) error {
 		var err error
 		err = initDragonBucket(tx)
+		if err != nil {
+			return err
+		}
+
+		err = initPawnRewardBucket(tx)
 		if err != nil {
 			return err
 		}
@@ -61,6 +76,11 @@ func (db *boltDB) init() error {
 	return nil
 }
 
+var (
+	dragonBucketName = []byte("dragon")
+	dragonBucketKey  = []byte("dragon")
+)
+
 func initDragonBucket(tx *bolt.Tx) error {
 	b := tx.Bucket(dragonBucketName)
 	if b == nil {
@@ -79,20 +99,6 @@ func initDragonBucket(tx *bolt.Tx) error {
 
 	return nil
 }
-
-func (db *boltDB) Close() error {
-	err := db.innerDB.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close the database: %v", err)
-	}
-
-	return nil
-}
-
-var (
-	dragonBucketName = []byte("dragon")
-	dragonBucketKey  = []byte("dragon")
-)
 
 func (db *boltDB) GetOnlineUrDragon() (dragon *game.OnlineUrDragon, err error) {
 	err = db.innerDB.View(func(tx *bolt.Tx) error {
@@ -253,4 +259,83 @@ func (db *boltDB) DeleteSession(ID string) error {
 	}
 
 	return nil
+}
+
+var (
+	pawnRewardBucketName = []byte("pawnreward")
+)
+
+func initPawnRewardBucket(tx *bolt.Tx) error {
+	b := tx.Bucket(pawnRewardBucketName)
+	if b == nil {
+		_, err := tx.CreateBucket(pawnRewardBucketName)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *boltDB) GetPawnRewards(userID uint64) (rewards *game.PawnRewards, err error) {
+	err = db.innerDB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(pawnRewardBucketName)
+		if b == nil {
+			return errors.New("database not initialized")
+		}
+
+		v := b.Get(userIDToKey(userID))
+		if v == nil {
+			return nil
+		}
+
+		var r game.PawnRewards
+		err = json.Unmarshal(v, &r)
+		if err != nil {
+			return err
+		}
+
+		rewards = &r
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("could not retrieve the pawn rewards: %v", err)
+	}
+
+	return rewards, nil
+}
+
+func (db *boltDB) PutPawnRewards(rewards *game.PawnRewards) error {
+	err := db.innerDB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(pawnRewardBucketName)
+		if b == nil {
+			return errors.New("database not initialized")
+		}
+
+		v, err := json.Marshal(rewards)
+		if err != nil {
+			return err
+		}
+
+		err = b.Put(userIDToKey(rewards.PawnUserID), v)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("could not save the pawn rewards: %v", err)
+	}
+
+	return nil
+}
+
+func userIDToKey(userID uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b[:], userID)
+	return b
 }

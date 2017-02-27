@@ -14,25 +14,40 @@ import (
 const SlotsMax = 100
 
 type UserArea struct {
-	Unknown      uint32 // 0
-	UnknownCount uint32
-	Slots        [SlotsMax]UserAreaSlot
+	Unknown  uint32 // 0
+	Revision uint32
+	Slots    [SlotsMax]UserAreaSlot
 }
 
 const ItemsMax = 10
 
 type UserAreaSlot struct {
-	Unknown    byte // 0=used, 1=unused
+	IsFree     byte // 0=used, 1=unused
 	Items      [ItemsMax]UserAreaItem
 	ItemsCount uint32
 	User       uint64
 }
 
-type UserAreaItem uint32
+const NoUserAreaItem UserAreaItem = -1
 
-const userAreaType = uint32(0x12122700)
+type UserAreaItem int32
+
+const userAreaType uint32 = 0x12122700
 
 var userAreaKey = []byte("nokupak amugod uznogarod")
+
+func NewUserArea() *UserArea {
+	area := &UserArea{}
+	for i := 0; i < len(area.Slots); i++ {
+		s := &area.Slots[i]
+		s.IsFree = 1
+		for j := 0; j < len(s.Items); j++ {
+			s.Items[j] = NoUserAreaItem
+		}
+	}
+
+	return area
+}
 
 func ReadUserArea(data []byte) (*UserArea, error) {
 	if len(data) == 0 {
@@ -313,13 +328,13 @@ func serializeUserArea(area *UserArea) ([]byte, error) {
 	data := make([]byte, userAreaLen)
 
 	binary.BigEndian.PutUint32(data[0:4], area.Unknown)
-	binary.BigEndian.PutUint32(data[4:8], area.UnknownCount)
+	binary.BigEndian.PutUint32(data[4:8], area.Revision)
 
 	var offset int = 8
 	for i := 0; i < len(area.Slots); i++ {
 		slot := &area.Slots[i]
 
-		data[offset] = slot.Unknown
+		data[offset] = slot.IsFree
 		offset += 1
 
 		for j := 0; j < len(slot.Items); j++ {
@@ -342,13 +357,13 @@ func parseUserArea(data []byte) (*UserArea, error) {
 
 	var area UserArea
 	area.Unknown = binary.BigEndian.Uint32(data[0:4])
-	area.UnknownCount = binary.BigEndian.Uint32(data[4:8])
+	area.Revision = binary.BigEndian.Uint32(data[4:8])
 
 	var offset int = 8
 	for i := 0; i < len(area.Slots); i++ {
 		slot := &area.Slots[i]
 
-		slot.Unknown = data[offset]
+		slot.IsFree = data[offset]
 		offset += 1
 
 		for j := 0; j < len(slot.Items); j++ {
