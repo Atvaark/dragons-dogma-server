@@ -35,3 +35,6 @@ vendor/
 *.db.lock
 *.crt
 *.key
+
+# heroku environment
+.env

@@ -31,7 +31,9 @@ func (c *Client) Connect() error {
 		return nil
 	}
 
-	conf := tls.Config{}
+	conf := tls.Config{
+		InsecureSkipVerify: true, // thawtePrimaryRootCA
+	}
 
 	printf("connecting\n")
 	tlsConn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", c.cfg.Host, c.cfg.Port), &conf)
